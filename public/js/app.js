@@ -61,10 +61,25 @@ function updateUIForAuthenticatedUser() {
 
 // Update UI for anonymous user
 function updateUIForAnonymousUser() {
-    document.getElementById('user-section').style.display = 'none';
-    document.getElementById('auth-section').style.display = 'block';
-    document.getElementById('progress-nav').style.display = 'none';
-    document.getElementById('admin-nav').style.display = 'none';
+    // Hide all authenticated-only UI elements
+    const userSection = document.getElementById('user-section');
+    if (userSection) userSection.style.display = 'none';
+    const authSection = document.getElementById('auth-section');
+    if (authSection) authSection.style.display = 'block';
+    const progressNav = document.getElementById('progress-nav');
+    if (progressNav) progressNav.style.display = 'none';
+    const adminNav = document.getElementById('admin-nav');
+    if (adminNav) adminNav.style.display = 'none';
+
+    // Clear any residual user specific text / avatar so no placeholder like JD shows
+    const userNameEl = document.getElementById('user-name');
+    if (userNameEl) userNameEl.textContent = '';
+    const userAvatarEl = document.getElementById('user-avatar');
+    if (userAvatarEl) userAvatarEl.textContent = '';
+
+    // Close any admin editor panels if left open
+    const adminEditor = document.getElementById('admin-editor');
+    if (adminEditor) adminEditor.style.display = 'none';
 }
 
 // Setup event listeners
@@ -358,6 +373,16 @@ const originalShowPageAdmin = showPage; showPage = function(pid){ originalShowPa
 
 // Show page
 function showPage(pageId) {
+    // Gate pages for anonymous users before any DOM changes
+    if (!currentUser) {
+        const protectedPages = ['progress-page','profile-page','admin-page'];
+        if (protectedPages.includes(pageId)) {
+            pageId = 'home-page';
+        }
+    } else if (currentUser && currentUser.role !== 'admin' && pageId === 'admin-page') {
+        // Non-admins can't view admin page
+        pageId = 'home-page';
+    }
     document.querySelectorAll('.page').forEach(page => {
         page.classList.remove('active');
     });
@@ -379,8 +404,37 @@ function showPage(pageId) {
     });
 }
 
+// Get user initials from username
+function getUserInitials(username) {
+    if (!username) return 'U';
+    
+    // Split by space and take first letter of each word
+    const names = username.trim().split(' ');
+    if (names.length === 1) {
+        // If only one name (like "subhash"), take first letter and "S" for last name
+        return names[0].charAt(0).toUpperCase() + 'S';
+    } else {
+        // If multiple names, take first letter of first and last name
+        return names[0].charAt(0).toUpperCase() + names[names.length - 1].charAt(0).toUpperCase();
+    }
+}
+
 // Logout
-function logout(){ if(confirm('Are you sure you want to logout?')){ localStorage.removeItem('authToken'); localStorage.removeItem('userData'); currentUser=null; currentRoadmap=null; userProgress={}; updateUIForAnonymousUser(); showPage('home-page'); showAlert('Logged out successfully!','success'); loadRoadmaps(); }}
+function logout() { 
+    if(confirm('Are you sure you want to logout?')) { 
+        localStorage.removeItem('authToken'); 
+        localStorage.removeItem('userData'); 
+        currentUser = null; 
+        currentRoadmap = null; 
+        userProgress = {}; 
+        updateUIForAnonymousUser(); 
+    // Ensure any protected pages are hidden
+    ['progress-page','profile-page','admin-page'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.remove('active'); });
+    showPage('home-page');
+        showAlert('Logged out successfully!', 'success'); 
+        loadRoadmaps(); 
+    }
+}
 
 // Show alert
 function showAlert(message,type='info'){ document.querySelectorAll('.alert-custom').forEach(a=>a.remove()); const alert=document.createElement('div'); alert.className=`alert alert-${type} alert-dismissible fade show position-fixed alert-custom`; alert.style.cssText='top:20px;right:20px;z-index:9999;max-width:400px;box-shadow:0 4px 12px rgba(0,0,0,0.15);'; alert.innerHTML=`${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`; document.body.appendChild(alert); setTimeout(()=>{ if(alert.parentNode) alert.remove(); },5000); }
