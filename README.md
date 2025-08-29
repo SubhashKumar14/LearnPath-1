@@ -1,6 +1,6 @@
 # LearnPath – Structured Roadmap Learning Platform
 
-LearnPath is a full‑stack learning platform for publishing structured learning roadmaps composed of modules and tasks. Users can enrol, track granular progress, and (prototype) earn badges/certificates. A single protected admin account can create and manage roadmaps, modules, and tasks through an integrated dashboard.
+LearnPath is a lightweight full‑stack learning platform for publishing and tracking structured learning roadmaps (→ modules → tasks). Learners enrol, toggle granular task completion, and (prototype) request badges/certificates after finishing a roadmap. A single protected admin account manages all roadmap content through the same SPA UX. The stack intentionally stays minimal (Express + MySQL + Vanilla JS) to maximize clarity and approachability.
 
 ---
 ## 📌 High‑Level Overview
@@ -16,8 +16,8 @@ LearnPath is a full‑stack learning platform for publishing structured learning
 | Activity feed & active roadmaps | ✅ Implemented |
 | Badge & certificate request endpoints (prototype) | ✅ Implemented (stub asset URLs) |
 | Secure page gating & logout hardening | ✅ Implemented |
-| Integration test script | ✅ Basic happy-path |
-| CI / automated tests coverage | ⏳ Planned |
+| Automated tests | ⏳ Planned |
+| CI workflow (GitHub Actions) | ⏳ Planned |
 | True asset generation (PDF/PNG) | ⏳ Planned |
 | Password reset / email verification | ⏳ Planned |
 | Role expansion (multi-admin / instructors) | ⏳ Planned |
@@ -74,16 +74,211 @@ users (1) ──< badges (per roadmap)
 ---
 ## 📂 Repository Structure
 ```
-server.js               # Express API & route definitions
-auth_middleware.js      # JWT auth + admin guard
-db.js                   # MySQL pool + connection test
-schema.sql              # Full database schema & seed data
-public/index.html       # Single-page shell & admin UI
-public/js/app.js        # All front-end logic (auth, UI, admin, progress)
-public/css/style.css    # Styling overrides
-integration-test.js     # Basic automated integration flow
-test-login.js           # Admin login verification helper
+server.js               # Express API & all route handlers (monolithic entry point)
+auth_middleware.js      # JWT verification + admin role gate helpers
+db.js                   # MySQL connection pool (mysql2) + initial connectivity check
+schema.sql              # Canonical schema + seed + optional prototype tables
+public/index.html       # SPA shell (sections shown/hidden via JS)
+public/badge.html       # Placeholder badge asset page (prototype)
+public/certificate.html # Placeholder certificate asset page (prototype)
+public/js/app.js        # Front-end controller: auth, rendering, admin CRUD, progress
+public/css/style.css    # Minimal custom styles over Bootstrap
+package.json            # Scripts + deps
+setup.sh                # Convenience setup script (Linux/macOS) – optional
 ```
+
+Removed legacy helper/test scripts after consolidation (see git history for reference).
+
+### File Responsibility Matrix (Quick View)
+| Layer | File(s) | Core Responsibilities |
+| ----- | ------- | --------------------- |
+| API Routing | `server.js` | Define endpoints, compose middleware, run queries |
+| Auth | `auth_middleware.js` | Decode JWT, attach user, enforce admin role |
+| Data Access | `db.js` | Provide pooled connection (promise API) |
+| Schema | `schema.sql` | DDL + seeds + optional experimental tables |
+| Frontend State | `public/js/app.js` | LocalStorage auth, DOM rendering, fetch orchestration |
+| Presentation | `public/*.html`, `public/css/style.css` | Static markup & styling |
+
+---
+## 🔑 Environment Variables
+Create a `.env` (keys are read via `process.env` – ensure you load them before starting if you add dotenv):
+| Variable | Required | Default (implicit) | Purpose |
+| -------- | -------- | ------------------ | ------- |
+| DB_HOST | ✅ | localhost | MySQL host |
+| DB_USER | ✅ | root | MySQL user |
+| DB_PASSWORD | ✅ | – | MySQL password |
+| DB_NAME | ✅ | learnpath_db | Database name (schema assumes this) |
+| JWT_SECRET | ✅ | – | HMAC signing key for JWTs |
+| PORT | ⏺ | 3000 | Server listen port |
+
+If you need dotenv support, install and add at top of `server.js`:
+```js
+// require('dotenv').config();
+```
+
+---
+## 🗄️ Database Schema (Core Tables)
+Core production‑relevant tables (prototype tables excluded here):
+
+| Table | Purpose | Key Columns / Notes |
+| ----- | ------- | ------------------- |
+| users | Account identities | `role` ENUM('user','admin'); unique `email` |
+| roadmaps | Top-level learning tracks | FK `created_by -> users.id` |
+| modules | Ordered groups within a roadmap | Cascade delete on roadmap removal |
+| tasks | Atomic actionable learning items | Optional `resource_url`; ordered per module |
+| user_progress | Per-task completion state | Unique (`user_id`,`task_id`); stores timestamp |
+| user_roadmaps | User enrolments | `started_at`, optional `completed_at` |
+| certificates | Issued certificates (prototype asset URL) | One per (user, roadmap) scenario |
+| badges | Issued badges (prototype asset URL) | One per (user, roadmap) scenario |
+
+Prototype / optional extension tables: `badge_requests`, `certificate_requests`, `courses`, `course_modules`, `lessons`, `user_courses`, `lesson_progress`.
+
+### Integrity & Constraints Highlights
+* Cascade deletes from `modules` → `tasks` ensure cleanup.
+* Unique key on `user_progress(user_id, task_id)` enables idempotent upsert semantics.
+* No soft deletes; physical removal assumed (simple model).
+
+### Suggested Future Indices
+| Table | Index | Rationale |
+| ----- | ----- | --------- |
+| user_progress | (user_id) | Fast per-user progress aggregation |
+| user_progress | (task_id) | Task completion stats |
+| user_roadmaps | (user_id, roadmap_id) | Accelerate completion lookups |
+
+---
+## 🔄 Typical Request Flow (Example: Toggle Task Completion)
+1. User clicks checkbox in UI.
+2. `app.js` sends `POST /api/progress/task` with `{ taskId, completed }` + `Authorization: Bearer <jwt>`.
+3. `authenticateToken` decodes token → attaches `req.user`.
+4. Handler performs upsert logic (INSERT ON DUPLICATE KEY UPDATE) in `user_progress`.
+5. Returns confirmation JSON; UI updates progress bar & activity feed.
+
+---
+## 🧪 Testing Strategy (Planned)
+Current state: No automated tests after cleanup (legacy scripts removed).
+
+Planned layers:
+1. Unit: Pure functions (if refactored out of route handlers).
+2. API: Supertest against in‑memory (or ephemeral) MySQL (possibly using Docker + migrations).
+3. Smoke: Startup + `/api/health` + seed account login.
+4. Future CI: GitHub Actions matrix (Node LTS versions) + lint + coverage threshold.
+
+---
+## 📡 API Surface (Condensed with Status Codes)
+Below is a concise list (see comments in `server.js` for live source of truth):
+
+| Method | Endpoint | Auth | 2xx | Common 4xx/5xx |
+| ------ | -------- | ---- | --- | -------------- |
+| POST | /api/register | Public | 201 | 400 (email exists) |
+| POST | /api/login | Public | 200 | 401 (bad creds) |
+| GET | /api/profile | User | 200 | 401 (no token) |
+| PUT | /api/profile | User | 200 | 400/401 |
+| GET | /api/roadmaps | Public | 200 | – |
+| GET | /api/roadmaps/:id | Public | 200 | 404 |
+| POST | /api/roadmaps | Admin | 201 | 401/403/400 |
+| PUT | /api/roadmaps/:id | Admin | 200 | 404 |
+| DELETE | /api/roadmaps/:id | Admin | 204 | 404 |
+| POST | /api/roadmaps/:id/start | User | 201 | 404 |
+| GET | /api/roadmaps/:id/progress | User | 200 | 404 |
+| POST | /api/modules/:roadmapId/modules | Admin | 201 | 404 |
+| POST | /api/modules/:moduleId/tasks | Admin | 201 | 404 |
+| POST | /api/progress/task | User | 200 | 400 |
+| GET | /api/user/activity | User | 200 | 401 |
+| GET | /api/admin/stats | Admin | 200 | 401/403 |
+| POST | /api/badges/request | User | 201 | 400 (incomplete) |
+| POST | /api/certificates/request | User | 201 | 400 (incomplete) |
+| GET | /api/health | Public | 200 | 500 (DB down) |
+
+---
+## 🧾 Representative JSON Payloads
+### Login Response
+```json
+{
+	"token": "<jwt>",
+	"user": {"id":1, "username":"admin", "email":"admin@learnpath.com", "role":"admin"}
+}
+```
+### Roadmap Detail (abridged)
+```json
+{
+	"id":1,
+	"title":"Data Structures & Algorithms",
+	"modules":[{
+		"id":10,
+		"title":"Arrays & Strings",
+		"tasks":[{"id":55, "title":"Introduction to Arrays", "completed":true}]
+	}]
+}
+```
+
+---
+## 🔐 Security Deep Dive
+Implemented controls:
+* JWT bearer auth (HMAC) – no refresh token layer yet.
+* Password hashing: bcrypt cost factor 10 (configurable).
+* Parameterized queries via mysql2 prepared statements.
+* Role guarding (single admin) both server and client side.
+* Logout thoroughly purges localStorage & hides protected UI.
+
+Risks / gaps (future work):
+* No rate limiting → brute force risk on `/api/login`.
+* No account lockout or MFA.
+* Token stored in localStorage (susceptible to XSS if introduced) – consider httpOnly cookies.
+* No CSRF protection (not critical with bearer header + same‑origin static serving but relevant if migrating to cookies).
+* No password policy / complexity checks.
+
+---
+## 🏗️ Deployment & Ops Checklist
+| Concern | Action |
+| ------- | ------ |
+| Secrets | Set strong `JWT_SECRET` via env store (Vault/Secrets Manager) |
+| DB Migrations | Move from monolithic `schema.sql` to tool (Prisma, Knex, Flyway) |
+| Logging | Add structured logger (pino/winston) + request IDs |
+| Monitoring | Add health probes + metrics exporter |
+| Backups | Automate MySQL dumps / point‑in‑time recovery |
+| HTTPS | Terminate TLS at reverse proxy (NGINX/Caddy) |
+
+---
+## 🧩 Extensibility Points
+| Area | Enhancement Idea |
+| ---- | ---------------- |
+| Content Types | Add quizzes / coding challenges table |
+| Credentialing | Real badge image generation + certificate PDF pipeline |
+| Analytics | Per‑task completion heatmaps, retention cohorts |
+| Roles | Instructor role for delegated content management |
+| Frontend | Modularize `app.js` (ESM) + build with Vite/Rollup |
+
+---
+## 🛠️ Troubleshooting
+| Symptom | Likely Cause | Fix |
+| ------- | ------------ | --- |
+| 500 on any DB route | DB not reachable | Verify env vars & MySQL running |
+| Login always 401 | Wrong seed hash or user missing | Rerun `schema.sql` seeding |
+| Progress not saving | Unique constraint failing silently | Check `user_progress` unique index exists |
+| Admin UI hidden after refresh | Token expired | Re-login (24h expiry) |
+
+---
+## 🧭 Roadmap (Refined Milestones)
+1. Security hardening (rate limiting, password reset, token refresh).
+2. Automated test harness (Supertest + Jest) + CI pipeline.
+3. Real credential asset generation service.
+4. Frontend modular refactor & accessibility audit.
+5. Multi-role & instructor authoring workflows.
+
+---
+## 📝 License
+MIT (add `LICENSE` file before public distribution).
+
+---
+## ✅ Current Status Snapshot
+Functional MVP with single-admin content management, learner progress tracking, prototype credential issuance, and a consolidated schema foundation ready for iterative enhancement.
+
+---
+## 📣 Support
+Open an issue with reproduction steps, expected vs actual behavior, and sanitized logs.
+
+---
+Happy learning & shipping.
 
 ---
 ## ⚙️ Installation & Setup
