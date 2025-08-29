@@ -186,6 +186,15 @@ body {
     background-color: #f8f9fa;
 }
 
+.task-item.task-completed label {
+    text-decoration: line-through;
+    color: #198754;
+}
+
+.task-item.task-completed {
+    background: #ecfdf5;
+}
+
 .task-checkbox input[type="checkbox"] {
     width: 18px;
     height: 18px;
@@ -284,3 +293,32 @@ body {
     margin-bottom: 1rem;
     opacity: 0.5;
 }
+
+/* Certificate / Badge grid */
+.certificate-badge {
+    border: 2px dashed var(--primary);
+    padding: 10px;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+/* Progress circle (optional future use) */
+.progress-circle {
+    --size: 140px;
+    --progress: 0;
+    width: var(--size);
+    height: var(--size);
+    border-radius: 50%;
+    background: conic-gradient(var(--primary) calc(var(--progress) * 1%), #e9ecef 0);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: var(--primary);
+    margin: 0 auto;
+}
+
+.progress-circle .progress-value { font-size: 1.4rem; }
+
+/* Custom alert override */
+.alert-custom { animation: fadeInUp 0.35s ease; }
