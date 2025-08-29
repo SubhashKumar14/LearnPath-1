@@ -123,3 +123,164 @@ body {
         padding: 20px;
     }
 }
+
+/* User Avatar Styles */
+.user-avatar {
+    width: 35px;
+    height: 35px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.8rem;
+    color: white;
+}
+
+.user-avatar-large {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.5rem;
+    color: white;
+    margin: 0 auto;
+}
+
+/* Profile Page Styles */
+.profile-avatar i {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    padding: 20px;
+    border-radius: 50%;
+    color: white;
+}
+
+/* Module and Task Styles */
+.module-card {
+    border-left: 4px solid var(--primary);
+}
+
+.module-number {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.task-item {
+    transition: background-color 0.3s ease;
+}
+
+.task-item:hover {
+    background-color: #f8f9fa;
+}
+
+.task-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
+.task-checkbox input[type="checkbox"]:checked {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+/* Activity Feed */
+.activity-icon {
+    width: 40px;
+    height: 40px;
+    background: #f8f9fa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Overall Progress Section */
+.overall-progress .progress {
+    height: 12px;
+    background-color: #e9ecef;
+}
+
+.overall-progress .progress-bar {
+    background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
+}
+
+/* Progress Stats Cards */
+.progress-stats .card {
+    border: none;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+}
+
+.progress-stats .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+/* Breadcrumb Styles */
+.breadcrumb {
+    background: transparent;
+    padding: 0;
+}
+
+.breadcrumb-item a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+    text-decoration: underline;
+}
+
+/* Modal Styles */
+.modal-content {
+    border: none;
+    border-radius: 15px;
+}
+
+/* Badge and Button Improvements */
+.badge {
+    font-size: 0.75rem;
+    padding: 0.5em 0.75em;
+    border-radius: 8px;
+}
+
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+/* Loading States */
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Empty States */
+.empty-state {
+    padding: 3rem 1rem;
+    text-align: center;
+    color: #6c757d;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}

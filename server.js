@@ -333,6 +333,180 @@ app.get('/api/courses/:id', async (req, res) => {
     }
 });
 
+// User Routes
+app.get('/api/user/stats', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        
+        // Get user statistics
+        const [roadmapStats] = await pool.execute(`
+            SELECT 
+                COUNT(DISTINCT up.roadmap_id) as roadmapsStarted,
+                COUNT(DISTINCT CASE WHEN up.completion_percentage = 100 THEN up.roadmap_id END) as roadmapsCompleted
+            FROM user_progress up 
+            WHERE up.user_id = ?
+        `, [userId]);
+
+        const [taskStats] = await pool.execute(`
+            SELECT COUNT(*) as tasksCompleted
+            FROM task_progress tp
+            WHERE tp.user_id = ? AND tp.completed = 1
+        `, [userId]);
+
+        const [badgeStats] = await pool.execute(`
+            SELECT COUNT(*) as badgesEarned
+            FROM badge_requests br
+            WHERE br.user_id = ? AND br.status = 'approved'
+        `, [userId]);
+
+        res.json({
+            roadmapsStarted: roadmapStats[0].roadmapsStarted || 0,
+            roadmapsCompleted: roadmapStats[0].roadmapsCompleted || 0,
+            tasksCompleted: taskStats[0].tasksCompleted || 0,
+            badgesEarned: badgeStats[0].badgesEarned || 0
+        });
+    } catch (error) {
+        console.error('Error fetching user stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.get('/api/user/activity', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        
+        // Get recent activity (task completions, roadmap starts, etc.)
+        const [activities] = await pool.execute(`
+            SELECT 
+                'task_completed' as type,
+                CONCAT('Completed task in ', r.title) as description,
+                tp.updated_at as created_at
+            FROM task_progress tp
+            JOIN tasks t ON tp.task_id = t.id
+            JOIN modules m ON t.module_id = m.id
+            JOIN roadmaps r ON m.roadmap_id = r.id
+            WHERE tp.user_id = ? AND tp.completed = 1
+            
+            UNION ALL
+            
+            SELECT 
+                'roadmap_started' as type,
+                CONCAT('Started roadmap: ', r.title) as description,
+                up.created_at
+            FROM user_progress up
+            JOIN roadmaps r ON up.roadmap_id = r.id
+            WHERE up.user_id = ?
+            
+            ORDER BY created_at DESC
+            LIMIT 10
+        `, [userId, userId]);
+
+        res.json(activities);
+    } catch (error) {
+        console.error('Error fetching user activity:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.get('/api/user/active-roadmaps', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        
+        // Get active roadmaps (started but not completed)
+        const [roadmaps] = await pool.execute(`
+            SELECT 
+                r.*,
+                up.completion_percentage as progress,
+                up.created_at as started_at
+            FROM roadmaps r
+            JOIN user_progress up ON r.id = up.roadmap_id
+            WHERE up.user_id = ? AND up.completion_percentage < 100
+            ORDER BY up.updated_at DESC
+        `, [userId]);
+
+        res.json(roadmaps);
+    } catch (error) {
+        console.error('Error fetching active roadmaps:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/badges/request', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { roadmapId } = req.body;
+
+        // Check if roadmap is completed
+        const [progress] = await pool.execute(
+            'SELECT completion_percentage FROM user_progress WHERE user_id = ? AND roadmap_id = ?',
+            [userId, roadmapId]
+        );
+
+        if (!progress.length || progress[0].completion_percentage < 100) {
+            return res.status(400).json({ error: 'Roadmap must be completed to request a badge' });
+        }
+
+        // Check if badge already requested
+        const [existing] = await pool.execute(
+            'SELECT id FROM badge_requests WHERE user_id = ? AND roadmap_id = ?',
+            [userId, roadmapId]
+        );
+
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'Badge already requested for this roadmap' });
+        }
+
+        // Create badge request
+        await pool.execute(
+            'INSERT INTO badge_requests (user_id, roadmap_id, status) VALUES (?, ?, ?)',
+            [userId, roadmapId, 'pending']
+        );
+
+        res.json({ message: 'Badge request submitted successfully' });
+    } catch (error) {
+        console.error('Error requesting badge:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/certificates/request', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { roadmapId } = req.body;
+
+        // Check if roadmap is completed
+        const [progress] = await pool.execute(
+            'SELECT completion_percentage FROM user_progress WHERE user_id = ? AND roadmap_id = ?',
+            [userId, roadmapId]
+        );
+
+        if (!progress.length || progress[0].completion_percentage < 100) {
+            return res.status(400).json({ error: 'Roadmap must be completed to request a certificate' });
+        }
+
+        // Check if certificate already requested
+        const [existing] = await pool.execute(
+            'SELECT id FROM certificate_requests WHERE user_id = ? AND roadmap_id = ?',
+            [userId, roadmapId]
+        );
+
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'Certificate already requested for this roadmap' });
+        }
+
+        // Create certificate request
+        await pool.execute(
+            'INSERT INTO certificate_requests (user_id, roadmap_id, status) VALUES (?, ?, ?)',
+            [userId, roadmapId, 'pending']
+        );
+
+        res.json({ message: 'Certificate request submitted successfully' });
+    } catch (error) {
+        console.error('Error requesting certificate:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Badge Request Routes
 app.post('/api/badge-requests', authenticateToken, async (req, res) => {
     try {
