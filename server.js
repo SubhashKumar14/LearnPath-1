@@ -264,6 +264,93 @@ app.delete('/api/roadmaps/:id', authenticateToken, requireAdmin, async (req, res
     }
 });
 
+// ------------------ Module & Task Management (Admin) ------------------
+// Create module
+app.post('/api/roadmaps/:roadmapId/modules', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { roadmapId } = req.params;
+        const { title } = req.body;
+        if (!title) return res.status(400).json({ error: 'Title is required' });
+        const [[{ nextIndex }]] = await pool.query('SELECT COALESCE(MAX(order_index),0)+1 AS nextIndex FROM modules WHERE roadmap_id = ?', [roadmapId]);
+        const [result] = await pool.execute('INSERT INTO modules (roadmap_id, title, order_index) VALUES (?, ?, ?)', [roadmapId, title, nextIndex]);
+        res.status(201).json({ id: result.insertId, title, order_index: nextIndex });
+    } catch (e) {
+        console.error('Error creating module:', e);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update module
+app.put('/api/modules/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title } = req.body;
+        if (!title) return res.status(400).json({ error: 'Title is required' });
+        const [result] = await pool.execute('UPDATE modules SET title = ? WHERE id = ?', [title, id]);
+        if (!result.affectedRows) return res.status(404).json({ error: 'Module not found' });
+        res.json({ message: 'Module updated' });
+    } catch (e) {
+        console.error('Error updating module:', e);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Delete module
+app.delete('/api/modules/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await pool.execute('DELETE FROM modules WHERE id = ?', [id]);
+        if (!result.affectedRows) return res.status(404).json({ error: 'Module not found' });
+        res.json({ message: 'Module deleted' });
+    } catch (e) {
+        console.error('Error deleting module:', e);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Create task
+app.post('/api/modules/:moduleId/tasks', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { moduleId } = req.params;
+        const { title, description = '', resource_url = '' } = req.body;
+        if (!title) return res.status(400).json({ error: 'Title is required' });
+        const [[{ nextIndex }]] = await pool.query('SELECT COALESCE(MAX(order_index),0)+1 AS nextIndex FROM tasks WHERE module_id = ?', [moduleId]);
+        const [result] = await pool.execute('INSERT INTO tasks (module_id, title, description, resource_url, order_index) VALUES (?,?,?,?,?)', [moduleId, title, description, resource_url, nextIndex]);
+        res.status(201).json({ id: result.insertId, title, order_index: nextIndex });
+    } catch (e) {
+        console.error('Error creating task:', e);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update task
+app.put('/api/tasks/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, description = '', resource_url = '' } = req.body;
+        if (!title) return res.status(400).json({ error: 'Title is required' });
+        const [result] = await pool.execute('UPDATE tasks SET title = ?, description = ?, resource_url = ? WHERE id = ?', [title, description, resource_url, id]);
+        if (!result.affectedRows) return res.status(404).json({ error: 'Task not found' });
+        res.json({ message: 'Task updated' });
+    } catch (e) {
+        console.error('Error updating task:', e);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Delete task
+app.delete('/api/tasks/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await pool.execute('DELETE FROM tasks WHERE id = ?', [id]);
+        if (!result.affectedRows) return res.status(404).json({ error: 'Task not found' });
+        res.json({ message: 'Task deleted' });
+    } catch (e) {
+        console.error('Error deleting task:', e);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Progress Routes
 app.get('/api/progress/:userId', authenticateToken, async (req, res) => {
     try {
@@ -375,69 +462,13 @@ app.post('/api/roadmaps/:id/start', authenticateToken, async (req, res) => {
 });
 
 // Course Routes
-app.get('/api/courses', async (req, res) => {
+// Health endpoint
+app.get('/api/health', async (req, res) => {
     try {
-        console.log('📍 GET /api/courses endpoint hit');
-        const [courses] = await pool.execute(`
-            SELECT c.*, u.username as creator_name,
-                   COUNT(DISTINCT cm.id) as module_count,
-                   COUNT(DISTINCT l.id) as lesson_count
-            FROM courses c 
-            LEFT JOIN users u ON c.created_by = u.id
-            LEFT JOIN course_modules cm ON c.id = cm.course_id
-            LEFT JOIN lessons l ON cm.id = l.module_id
-            GROUP BY c.id
-            ORDER BY c.created_at DESC
-        `);
-
-        console.log(`📊 Found ${courses.length} courses`);
-        res.json(courses);
-    } catch (error) {
-        console.error('Error fetching courses:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-app.get('/api/courses/:id', async (req, res) => {
-    try {
-        const courseId = req.params.id;
-
-        const [courses] = await pool.execute(
-            'SELECT * FROM courses WHERE id = ?',
-            [courseId]
-        );
-
-        if (courses.length === 0) {
-            return res.status(404).json({ error: 'Course not found' });
-        }
-
-        const [modules] = await pool.execute(`
-            SELECT cm.*, 
-                   JSON_ARRAYAGG(
-                       JSON_OBJECT(
-                           'id', l.id,
-                           'title', l.title,
-                           'description', l.description,
-                           'resource_url', l.resource_url,
-                           'order_index', l.order_index
-                       )
-                   ) as lessons
-            FROM course_modules cm
-            LEFT JOIN lessons l ON cm.id = l.module_id
-            WHERE cm.course_id = ?
-            GROUP BY cm.id
-            ORDER BY cm.order_index
-        `, [courseId]);
-
-        const course = {
-            ...courses[0],
-            modules: modules
-        };
-
-        res.json(course);
-    } catch (error) {
-        console.error('Error fetching course:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        await pool.execute('SELECT 1');
+        res.json({ status: 'ok', time: new Date().toISOString() });
+    } catch (e) {
+        res.status(500).json({ status: 'error' });
     }
 });
 
@@ -583,196 +614,121 @@ app.post('/api/certificates/request', authenticateToken, async (req, res) => {
 });
 
 // Badge Request Routes
-app.post('/api/badge-requests', authenticateToken, async (req, res) => {
+// Admin module management endpoints
+app.post('/api/admin/roadmaps/:roadmapId/modules', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const { roadmapId, recipientName, roadmapName } = req.body;
-        const userId = req.user.userId;
+        const { roadmapId } = req.params;
+        const { title, order_index } = req.body;
+        if (!title) return res.status(400).json({ error: 'Module title is required' });
+        
+        const [result] = await pool.execute(
+            'INSERT INTO modules (roadmap_id, title, order_index) VALUES (?, ?, ?)',
+            [roadmapId, title, order_index || 1]
+        );
+        
+        res.status(201).json({ message: 'Module created successfully', moduleId: result.insertId });
+    } catch (error) {
+        console.error('Error creating module:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 
-        // Check if user has completed the roadmap
-        const [progress] = await pool.execute(`
+app.put('/api/admin/modules/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, order_index } = req.body;
+        
+        const [result] = await pool.execute(
+            'UPDATE modules SET title = ?, order_index = ? WHERE id = ?',
+            [title, order_index, id]
+        );
+        
+        if (!result.affectedRows) return res.status(404).json({ error: 'Module not found' });
+        res.json({ message: 'Module updated successfully' });
+    } catch (error) {
+        console.error('Error updating module:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.delete('/api/admin/modules/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await pool.execute('DELETE FROM modules WHERE id = ?', [id]);
+        if (!result.affectedRows) return res.status(404).json({ error: 'Module not found' });
+        res.json({ message: 'Module deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting module:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Admin task management endpoints
+app.post('/api/admin/modules/:moduleId/tasks', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { moduleId } = req.params;
+        const { title, description, resource_url, order_index } = req.body;
+        if (!title) return res.status(400).json({ error: 'Task title is required' });
+        
+        const [result] = await pool.execute(
+            'INSERT INTO tasks (module_id, title, description, resource_url, order_index) VALUES (?, ?, ?, ?, ?)',
+            [moduleId, title, description || '', resource_url || '', order_index || 1]
+        );
+        
+        res.status(201).json({ message: 'Task created successfully', taskId: result.insertId });
+    } catch (error) {
+        console.error('Error creating task:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.put('/api/admin/tasks/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, description, resource_url, order_index } = req.body;
+        
+        const [result] = await pool.execute(
+            'UPDATE tasks SET title = ?, description = ?, resource_url = ?, order_index = ? WHERE id = ?',
+            [title, description, resource_url, order_index, id]
+        );
+        
+        if (!result.affectedRows) return res.status(404).json({ error: 'Task not found' });
+        res.json({ message: 'Task updated successfully' });
+    } catch (error) {
+        console.error('Error updating task:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await pool.execute('DELETE FROM tasks WHERE id = ?', [id]);
+        if (!result.affectedRows) return res.status(404).json({ error: 'Task not found' });
+        res.json({ message: 'Task deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting task:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Admin dashboard stats
+app.get('/api/admin/stats', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const [stats] = await pool.execute(`
             SELECT 
-                COUNT(t.id) as total_tasks,
-                COUNT(up.id) as completed_tasks
-            FROM roadmaps r
-            LEFT JOIN modules m ON r.id = m.roadmap_id
-            LEFT JOIN tasks t ON m.id = t.module_id
-            LEFT JOIN user_progress up ON t.id = up.task_id AND up.user_id = ? AND up.completed = TRUE
-            WHERE r.id = ?
-            GROUP BY r.id
-        `, [userId, roadmapId]);
-
-        if (progress.length === 0 || progress[0].total_tasks === 0) {
-            return res.status(400).json({ error: 'Roadmap not found or has no tasks' });
-        }
-
-        if (progress[0].completed_tasks < progress[0].total_tasks) {
-            return res.status(400).json({ error: 'Roadmap not completed yet' });
-        }
-
-        // Check if already requested
-        const [existing] = await pool.execute(
-            'SELECT id FROM badge_requests WHERE user_id = ? AND roadmap_id = ?',
-            [userId, roadmapId]
-        );
-
-        if (existing.length > 0) {
-            return res.status(400).json({ error: 'Badge already requested for this roadmap' });
-        }
-
-        await pool.execute(
-            'INSERT INTO badge_requests (user_id, roadmap_id, recipient_name, roadmap_name, completion_date) VALUES (?, ?, ?, ?, CURDATE())',
-            [userId, roadmapId, recipientName, roadmapName]
-        );
-
-        res.json({ message: 'Badge request submitted successfully' });
-    } catch (error) {
-        console.error('Error creating badge request:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Certificate Request Routes  
-app.post('/api/certificate-requests', authenticateToken, async (req, res) => {
-    try {
-        const { courseId, recipientName, courseName } = req.body;
-        const userId = req.user.userId;
-
-        // Check if user has completed the course
-        const [progress] = await pool.execute(`
-            SELECT 
-                COUNT(l.id) as total_lessons,
-                COUNT(lp.id) as completed_lessons
-            FROM courses c
-            LEFT JOIN course_modules cm ON c.id = cm.course_id
-            LEFT JOIN lessons l ON cm.id = l.module_id
-            LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = ? AND lp.completed = TRUE
-            WHERE c.id = ?
-            GROUP BY c.id
-        `, [userId, courseId]);
-
-        if (progress.length === 0 || progress[0].total_lessons === 0) {
-            return res.status(400).json({ error: 'Course not found or has no lessons' });
-        }
-
-        if (progress[0].completed_lessons < progress[0].total_lessons) {
-            return res.status(400).json({ error: 'Course not completed yet' });
-        }
-
-        // Check if already requested
-        const [existing] = await pool.execute(
-            'SELECT id FROM certificate_requests WHERE user_id = ? AND course_id = ?',
-            [userId, courseId]
-        );
-
-        if (existing.length > 0) {
-            return res.status(400).json({ error: 'Certificate already requested for this course' });
-        }
-
-        await pool.execute(
-            'INSERT INTO certificate_requests (user_id, course_id, recipient_name, course_name, completion_date) VALUES (?, ?, ?, ?, CURDATE())',
-            [userId, courseId, recipientName, courseName]
-        );
-
-        res.json({ message: 'Certificate request submitted successfully' });
-    } catch (error) {
-        console.error('Error creating certificate request:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Admin Routes
-app.get('/api/admin/badge-requests', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const [requests] = await pool.execute(`
-            SELECT br.*, u.username, u.email, r.title as roadmap_title
-            FROM badge_requests br
-            JOIN users u ON br.user_id = u.id
-            JOIN roadmaps r ON br.roadmap_id = r.id
-            ORDER BY br.requested_at DESC
+                (SELECT COUNT(*) FROM users) as total_users,
+                (SELECT COUNT(*) FROM roadmaps) as total_roadmaps,
+                (SELECT COUNT(*) FROM modules) as total_modules,
+                (SELECT COUNT(*) FROM tasks) as total_tasks,
+                (SELECT COUNT(*) FROM user_progress WHERE completed = 1) as completed_tasks,
+                (SELECT COUNT(*) FROM certificates) as certificates_issued,
+                (SELECT COUNT(*) FROM badges) as badges_issued
         `);
-
-        res.json(requests);
+        
+        res.json(stats[0]);
     } catch (error) {
-        console.error('Error fetching badge requests:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-app.get('/api/admin/certificate-requests', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const [requests] = await pool.execute(`
-            SELECT cr.*, u.username, u.email, c.title as course_title
-            FROM certificate_requests cr
-            JOIN users u ON cr.user_id = u.id
-            JOIN courses c ON cr.course_id = c.id
-            ORDER BY cr.requested_at DESC
-        `);
-
-        res.json(requests);
-    } catch (error) {
-        console.error('Error fetching certificate requests:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-app.post('/api/admin/badge-requests/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const requestId = req.params.id;
-        const { recipientName, roadmapName, completionDate } = req.body;
-        const adminId = req.user.userId;
-
-        await pool.execute(
-            'UPDATE badge_requests SET status = "approved", approved_at = NOW(), approved_by = ?, recipient_name = ?, roadmap_name = ?, completion_date = ? WHERE id = ?',
-            [adminId, recipientName, roadmapName, completionDate, requestId]
-        );
-
-        // Create badge record
-        const [request] = await pool.execute(
-            'SELECT user_id, roadmap_id FROM badge_requests WHERE id = ?',
-            [requestId]
-        );
-
-        if (request.length > 0) {
-            await pool.execute(
-                'INSERT INTO badges (user_id, roadmap_id, badge_url) VALUES (?, ?, ?)',
-                [request[0].user_id, request[0].roadmap_id, `/badges/${requestId}.html`]
-            );
-        }
-
-        res.json({ message: 'Badge request approved successfully' });
-    } catch (error) {
-        console.error('Error approving badge request:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-app.post('/api/admin/certificate-requests/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const requestId = req.params.id;
-        const { recipientName, courseName, completionDate } = req.body;
-        const adminId = req.user.userId;
-
-        await pool.execute(
-            'UPDATE certificate_requests SET status = "approved", approved_at = NOW(), approved_by = ?, recipient_name = ?, course_name = ?, completion_date = ? WHERE id = ?',
-            [adminId, recipientName, courseName, completionDate, requestId]
-        );
-
-        // Create certificate record
-        const [request] = await pool.execute(
-            'SELECT user_id, course_id FROM certificate_requests WHERE id = ?',
-            [requestId]
-        );
-
-        if (request.length > 0) {
-            await pool.execute(
-                'INSERT INTO certificates (user_id, roadmap_id, certificate_url) VALUES (?, ?, ?)',
-                [request[0].user_id, request[0].course_id, `/certificates/${requestId}.html`]
-            );
-        }
-
-        res.json({ message: 'Certificate request approved successfully' });
-    } catch (error) {
-        console.error('Error approving certificate request:', error);
+        console.error('Error fetching admin stats:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

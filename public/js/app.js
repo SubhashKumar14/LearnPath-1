@@ -79,6 +79,14 @@ function setupEventListeners() {
     if (searchInput) searchInput.addEventListener('input', filterRoadmaps);
     const difficultyFilter = document.getElementById('difficulty-filter');
     if (difficultyFilter) difficultyFilter.addEventListener('change', filterRoadmaps);
+    
+    // Admin form listeners
+    const createRoadmapForm = document.getElementById('create-roadmap-form');
+    if (createRoadmapForm) createRoadmapForm.addEventListener('submit', handleCreateRoadmap);
+    const createModuleForm = document.getElementById('create-module-form');
+    if (createModuleForm) createModuleForm.addEventListener('submit', handleCreateModule);
+    const createTaskForm = document.getElementById('create-task-form');
+    if (createTaskForm) createTaskForm.addEventListener('submit', handleCreateTask);
 }
 
 // Handle login
@@ -324,6 +332,29 @@ async function startRoadmap(){ if(!currentUser) { showAlert('Login first','warni
 
 // Create roadmap (admin function)
 async function createRoadmap(){ if(!currentUser||currentUser.role!=='admin') return showAlert('Admin access required','danger'); showAlert('Admin creation UI not implemented yet','info'); }
+
+// ---------------- Admin Functions ----------------
+let adminEditingRoadmapId = null;
+
+function adminShowCreateRoadmap(){ if(!adminCheck()) return; adminEditingRoadmapId=null; document.getElementById('admin-editor-title').textContent='Create Roadmap'; document.getElementById('admin-roadmap-form').reset(); document.getElementById('admin-editor').style.display='block'; document.getElementById('admin-modules').innerHTML=''; }
+function adminCloseEditor(){ document.getElementById('admin-editor').style.display='none'; }
+function adminCheck(){ if(!currentUser||currentUser.role!=='admin'){ showAlert('Admin only','danger'); return false;} return true; }
+async function adminReloadRoadmaps(){ if(!adminCheck()) return; const res = await fetch(`${API_BASE}/roadmaps`); const data = await res.json(); const container=document.getElementById('admin-roadmaps'); container.innerHTML=''; data.forEach(r=>{ container.innerHTML += `<div class='col-md-4'><div class="card h-100"><div class="card-body"><h6 class='fw-bold mb-1'>${r.title}</h6><small class='text-muted d-block mb-2'>${r.difficulty||'Beginner'} • ${r.task_count||0} tasks</small><div class='d-flex gap-2'><button class='btn btn-sm btn-outline-primary' onclick='adminEditRoadmap(${r.id})'><i class="fas fa-edit"></i></button><button class='btn btn-sm btn-outline-danger' onclick='adminDeleteRoadmap(${r.id})'><i class="fas fa-trash"></i></button></div></div></div></div>`; }); }
+async function adminEditRoadmap(id){ if(!adminCheck()) return; const res = await fetch(`${API_BASE}/roadmaps/${id}`); if(!res.ok) return showAlert('Error loading roadmap','danger'); const rm = await res.json(); adminEditingRoadmapId=id; document.getElementById('admin-roadmap-title').value=rm.title; document.getElementById('admin-roadmap-description').value=rm.description||''; document.getElementById('admin-roadmap-difficulty').value=rm.difficulty||'Beginner'; document.getElementById('admin-roadmap-duration').value=rm.duration||30; document.getElementById('admin-editor-title').textContent='Edit Roadmap'; document.getElementById('admin-editor').style.display='block'; adminRenderModules(rm.modules||[]); }
+async function adminDeleteRoadmap(id){ if(!adminCheck()) return; if(!confirm('Delete this roadmap?')) return; const res = await fetch(`${API_BASE}/roadmaps/${id}`,{method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ showAlert('Roadmap deleted','success'); adminReloadRoadmaps(); } else { showAlert('Delete failed','danger'); } }
+document.addEventListener('submit', e=>{ if(e.target && e.target.id==='admin-roadmap-form'){ e.preventDefault(); adminSaveRoadmap(); }});
+async function adminSaveRoadmap(){ if(!adminCheck()) return; const title=document.getElementById('admin-roadmap-title').value.trim(); const description=document.getElementById('admin-roadmap-description').value.trim(); const difficulty=document.getElementById('admin-roadmap-difficulty').value; const duration=parseInt(document.getElementById('admin-roadmap-duration').value)||30; if(!title||!description) return showAlert('Title & description required','warning'); const body=JSON.stringify({title,description,difficulty,duration}); const headers={'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`}; let res; if(adminEditingRoadmapId){ res = await fetch(`${API_BASE}/roadmaps/${adminEditingRoadmapId}`,{method:'PUT',headers,body}); } else { res= await fetch(`${API_BASE}/roadmaps`,{method:'POST',headers,body}); } if(res.ok){ showAlert('Saved','success'); adminReloadRoadmaps(); if(!adminEditingRoadmapId){ const data=await res.json(); adminEditingRoadmapId=data.roadmapId; } } else { const d=await res.json(); showAlert(d.error||'Save failed','danger'); } }
+function adminRenderModules(mods){ const container=document.getElementById('admin-modules'); container.innerHTML = mods.map(m=>adminModuleHtml(m)).join(''); }
+function adminModuleHtml(m){ return `<div class='card mb-2' data-module-id='${m.id}'><div class='card-header py-2 d-flex align-items-center gap-2'><strong class='flex-grow-1'>${m.title}</strong><button class='btn btn-sm btn-outline-secondary' onclick='adminPromptEditModule(${m.id})'><i class="fas fa-edit"></i></button><button class='btn btn-sm btn-outline-danger' onclick='adminDeleteModule(${m.id})'><i class="fas fa-trash"></i></button><button class='btn btn-sm btn-outline-primary' onclick='adminAddTask(${m.id})'><i class="fas fa-plus"></i></button></div><div class='card-body p-2'>${(m.tasks||[]).map(t=>adminTaskHtml(t)).join('')||'<small class="text-muted">No tasks</small>'}</div></div>`; }
+function adminTaskHtml(t){ return `<div class='border rounded p-2 d-flex align-items-center mb-1' data-task-id='${t.id}'><div class='flex-grow-1'><div class='fw-semibold small'>${t.title}</div>${t.description?`<div class='small text-muted'>${t.description}</div>`:''}</div><div class='d-flex gap-1'><button class='btn btn-sm btn-outline-secondary' onclick='adminPromptEditTask(${t.id})'><i class="fas fa-edit"></i></button><button class='btn btn-sm btn-outline-danger' onclick='adminDeleteTask(${t.id})'><i class="fas fa-trash"></i></button></div></div>`; }
+async function adminAddModule(){ if(!adminEditingRoadmapId) return showAlert('Save roadmap first','warning'); const title=prompt('Module title?'); if(!title) return; const res=await fetch(`${API_BASE}/roadmaps/${adminEditingRoadmapId}/modules`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({title})}); if(res.ok){ const mod=await res.json(); adminEditRoadmap(adminEditingRoadmapId); } else showAlert('Create module failed','danger'); }
+async function adminPromptEditModule(id){ const card=document.querySelector(`[data-module-id='${id}']`); if(!card) return; const current=card.querySelector('strong').textContent; const title=prompt('New module title', current); if(!title||title===current) return; const res=await fetch(`${API_BASE}/modules/${id}`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({title})}); if(res.ok){ showAlert('Module updated','success'); adminEditRoadmap(adminEditingRoadmapId);} else showAlert('Update failed','danger'); }
+async function adminDeleteModule(id){ if(!confirm('Delete module (tasks will be removed)?')) return; const res=await fetch(`${API_BASE}/modules/${id}`,{method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ showAlert('Module deleted','success'); adminEditRoadmap(adminEditingRoadmapId);} else showAlert('Delete failed','danger'); }
+async function adminAddTask(moduleId){ const title=prompt('Task title?'); if(!title) return; const description=prompt('Task description (optional)',''); const resource_url=prompt('Resource URL (optional)',''); const res=await fetch(`${API_BASE}/modules/${moduleId}/tasks`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({title,description,resource_url})}); if(res.ok){ showAlert('Task added','success'); adminEditRoadmap(adminEditingRoadmapId);} else showAlert('Add task failed','danger'); }
+async function adminPromptEditTask(id){ const el=document.querySelector(`[data-task-id='${id}']`); if(!el) return; const currentTitle=el.querySelector('.fw-semibold').textContent; const newTitle=prompt('Task title', currentTitle); if(!newTitle) return; const description=prompt('Task description',''); const resource_url=prompt('Resource URL',''); const res=await fetch(`${API_BASE}/tasks/${id}`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({title:newTitle,description,resource_url})}); if(res.ok){ showAlert('Task updated','success'); adminEditRoadmap(adminEditingRoadmapId);} else showAlert('Update failed','danger'); }
+async function adminDeleteTask(id){ if(!confirm('Delete task?')) return; const res=await fetch(`${API_BASE}/tasks/${id}`,{method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ showAlert('Task deleted','success'); adminEditRoadmap(adminEditingRoadmapId);} else showAlert('Delete failed','danger'); }
+// Initial admin load when page shown
+const originalShowPageAdmin = showPage; showPage = function(pid){ originalShowPageAdmin(pid); if(pid==='admin-page' && currentUser && currentUser.role==='admin'){ adminReloadRoadmaps(); } };
 
 // Show page
 function showPage(pageId) {
@@ -892,6 +923,369 @@ function editProfile() {
     showAlert('Profile editing feature coming soon!', 'info');
 }
 
+// Admin Functions
+async function loadAdminStats() {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/admin/stats`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        
+        if (response.ok) {
+            const stats = await response.json();
+            document.getElementById('stat-users').textContent = stats.total_users;
+            document.getElementById('stat-roadmaps').textContent = stats.total_roadmaps;
+            document.getElementById('stat-modules').textContent = stats.total_modules;
+            document.getElementById('stat-tasks').textContent = stats.total_tasks;
+            document.getElementById('stat-certificates').textContent = stats.certificates_issued;
+            document.getElementById('stat-badges').textContent = stats.badges_issued;
+        }
+    } catch (error) {
+        console.error('Error loading admin stats:', error);
+    }
+}
+
+async function loadAdminRoadmaps() {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/roadmaps`);
+        const roadmaps = await response.json();
+        
+        const container = document.getElementById('admin-roadmaps-list');
+        if (!roadmaps.length) {
+            container.innerHTML = '<p class="text-muted text-center py-3">No roadmaps found. Create your first roadmap!</p>';
+            return;
+        }
+        
+        const roadmapsHTML = roadmaps.map(roadmap => `
+            <div class="card mb-3" data-roadmap-id="${roadmap.id}">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h6 class="fw-bold mb-1">${roadmap.title}</h6>
+                            <p class="text-muted mb-2">${roadmap.description}</p>
+                            <div class="d-flex gap-3">
+                                <small><i class="fas fa-signal me-1"></i>${roadmap.difficulty}</small>
+                                <small><i class="far fa-clock me-1"></i>${roadmap.duration} days</small>
+                                <small><i class="fas fa-layer-group me-1"></i>${roadmap.module_count || 0} modules</small>
+                                <small><i class="fas fa-tasks me-1"></i>${roadmap.task_count || 0} tasks</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="manageRoadmapModules(${roadmap.id}, '${roadmap.title}')">
+                                    <i class="fas fa-cogs me-1"></i>Manage
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="editRoadmap(${roadmap.id})">
+                                    <i class="fas fa-edit me-1"></i>Edit
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="deleteRoadmap(${roadmap.id})">
+                                    <i class="fas fa-trash me-1"></i>Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = roadmapsHTML;
+    } catch (error) {
+        console.error('Error loading admin roadmaps:', error);
+        document.getElementById('admin-roadmaps-list').innerHTML = 
+            '<p class="text-danger text-center py-3">Error loading roadmaps</p>';
+    }
+}
+
+function showCreateRoadmapModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createRoadmapModal'));
+    modal.show();
+}
+
+async function manageRoadmapModules(roadmapId, roadmapTitle) {
+    try {
+        const response = await fetch(`${API_BASE}/roadmaps/${roadmapId}`);
+        const roadmap = await response.json();
+        
+        // Create a management interface
+        const modalHTML = `
+            <div class="modal fade" id="manageModulesModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Manage: ${roadmapTitle}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="d-flex justify-content-between mb-3">
+                                <h6>Modules & Tasks</h6>
+                                <button class="btn btn-sm btn-primary" onclick="showCreateModuleModal(${roadmapId})">
+                                    <i class="fas fa-plus me-1"></i>Add Module
+                                </button>
+                            </div>
+                            <div id="modules-management">
+                                ${roadmap.modules.map((module, index) => `
+                                    <div class="card mb-2">
+                                        <div class="card-header">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span><strong>${index + 1}. ${module.title}</strong></span>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-primary" onclick="showCreateTaskModal(${module.id})">
+                                                        <i class="fas fa-plus me-1"></i>Add Task
+                                                    </button>
+                                                    <button class="btn btn-outline-danger" onclick="deleteModule(${module.id})">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            ${module.tasks.map((task, taskIndex) => `
+                                                <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                                                    <span>${taskIndex + 1}. ${task.title}</span>
+                                                    <button class="btn btn-outline-danger btn-sm" onclick="deleteTask(${task.id})">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            `).join('')}
+                                            ${!module.tasks.length ? '<p class="text-muted mb-0">No tasks yet</p>' : ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                                ${!roadmap.modules.length ? '<p class="text-muted">No modules yet. Add your first module!</p>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if present
+        const existingModal = document.getElementById('manageModulesModal');
+        if (existingModal) existingModal.remove();
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        const modal = new bootstrap.Modal(document.getElementById('manageModulesModal'));
+        modal.show();
+        
+        // Clean up modal after hiding
+        document.getElementById('manageModulesModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+        
+    } catch (error) {
+        console.error('Error loading roadmap details:', error);
+        showAlert('Error loading roadmap details', 'danger');
+    }
+}
+
+function showCreateModuleModal(roadmapId) {
+    document.getElementById('module-roadmap-id').value = roadmapId;
+    const modal = new bootstrap.Modal(document.getElementById('createModuleModal'));
+    modal.show();
+}
+
+function showCreateTaskModal(moduleId) {
+    document.getElementById('task-module-id').value = moduleId;
+    const modal = new bootstrap.Modal(document.getElementById('createTaskModal'));
+    modal.show();
+}
+
+async function deleteRoadmap(roadmapId) {
+    if (!confirm('Are you sure you want to delete this roadmap? This will also delete all modules and tasks.')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/roadmaps/${roadmapId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        
+        if (response.ok) {
+            showAlert('Roadmap deleted successfully', 'success');
+            loadAdminRoadmaps();
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'Error deleting roadmap', 'danger');
+        }
+    } catch (error) {
+        console.error('Error deleting roadmap:', error);
+        showAlert('Error deleting roadmap', 'danger');
+    }
+}
+
+async function deleteModule(moduleId) {
+    if (!confirm('Are you sure you want to delete this module and all its tasks?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/admin/modules/${moduleId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        
+        if (response.ok) {
+            showAlert('Module deleted successfully', 'success');
+            // Refresh the current modal view
+            location.reload(); // Simple approach - reload page
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'Error deleting module', 'danger');
+        }
+    } catch (error) {
+        console.error('Error deleting module:', error);
+        showAlert('Error deleting module', 'danger');
+    }
+}
+
+async function deleteTask(taskId) {
+    if (!confirm('Are you sure you want to delete this task?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/admin/tasks/${taskId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        
+        if (response.ok) {
+            showAlert('Task deleted successfully', 'success');
+            location.reload(); // Simple approach - reload page
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'Error deleting task', 'danger');
+        }
+    } catch (error) {
+        console.error('Error deleting task:', error);
+        showAlert('Error deleting task', 'danger');
+    }
+}
+
+// Admin form handlers
+async function handleCreateRoadmap(e) {
+    e.preventDefault();
+    
+    const title = document.getElementById('roadmap-title').value;
+    const description = document.getElementById('roadmap-description').value;
+    const difficulty = document.getElementById('roadmap-difficulty').value;
+    const duration = document.getElementById('roadmap-duration').value;
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch(`${API_BASE}/roadmaps`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify({ title, description, difficulty, duration: parseInt(duration) })
+        });
+        
+        if (response.ok) {
+            showAlert('Roadmap created successfully!', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('createRoadmapModal')).hide();
+            document.getElementById('create-roadmap-form').reset();
+            loadAdminRoadmaps();
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'Error creating roadmap', 'danger');
+        }
+    } catch (error) {
+        console.error('Error creating roadmap:', error);
+        showAlert('Error creating roadmap', 'danger');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
+async function handleCreateModule(e) {
+    e.preventDefault();
+    
+    const roadmapId = document.getElementById('module-roadmap-id').value;
+    const title = document.getElementById('module-title').value;
+    const order_index = document.getElementById('module-order').value;
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch(`${API_BASE}/admin/roadmaps/${roadmapId}/modules`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify({ title, order_index: parseInt(order_index) })
+        });
+        
+        if (response.ok) {
+            showAlert('Module added successfully!', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('createModuleModal')).hide();
+            document.getElementById('create-module-form').reset();
+            // Refresh the page to show updated modules
+            location.reload();
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'Error creating module', 'danger');
+        }
+    } catch (error) {
+        console.error('Error creating module:', error);
+        showAlert('Error creating module', 'danger');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
+async function handleCreateTask(e) {
+    e.preventDefault();
+    
+    const moduleId = document.getElementById('task-module-id').value;
+    const title = document.getElementById('task-title').value;
+    const description = document.getElementById('task-description').value;
+    const resource_url = document.getElementById('task-resource-url').value;
+    const order_index = document.getElementById('task-order').value;
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch(`${API_BASE}/admin/modules/${moduleId}/tasks`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify({ title, description, resource_url, order_index: parseInt(order_index) })
+        });
+        
+        if (response.ok) {
+            showAlert('Task added successfully!', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('createTaskModal')).hide();
+            document.getElementById('create-task-form').reset();
+            // Refresh the page to show updated tasks
+            location.reload();
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'Error creating task', 'danger');
+        }
+    } catch (error) {
+        console.error('Error creating task:', error);
+        showAlert('Error creating task', 'danger');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
 // Format date
 function formatDate(dateString) {
     const date = new Date(dateString);
@@ -908,5 +1302,8 @@ showPage = function(pageId) {
         loadProfileData();
     } else if (pageId === 'progress-page' && currentUser) {
         loadProgressPage();
+    } else if (pageId === 'admin-page' && currentUser && currentUser.role === 'admin') {
+        loadAdminStats();
+        loadAdminRoadmaps();
     }
 };

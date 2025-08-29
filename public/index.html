@@ -271,9 +271,28 @@
                             <p class="text-muted" id="profile-email">Loading...</p>
                             <span class="badge bg-primary" id="profile-role">User</span>
                             <div class="mt-3">
-                                <button class="btn btn-outline-primary btn-sm" onclick="editProfile()">
+                                <button class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#edit-profile-form">
                                     <i class="fas fa-edit me-1"></i>Edit Profile
                                 </button>
+                            </div>
+                            <div class="collapse mt-3" id="edit-profile-form">
+                                <form id="profile-form" class="text-start">
+                                    <div class="mb-2">
+                                        <label class="form-label small mb-1">Name</label>
+                                        <input type="text" class="form-control form-control-sm" id="profile-username" required>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label small mb-1">Email</label>
+                                        <input type="email" class="form-control form-control-sm" id="profile-email" required>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label small mb-1">New Password (optional)</label>
+                                        <input type="password" class="form-control form-control-sm" id="profile-password" placeholder="Leave blank to keep current">
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-primary w-100">
+                                        <i class="fas fa-save me-1"></i>Save Changes
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>
@@ -387,19 +406,89 @@
     </div>
 
     <!-- Admin Page -->
+    <!-- Admin Page -->
     <div id="admin-page" class="page">
         <div class="container my-5">
-            <h2 class="fw-bold mb-4">Admin Dashboard</h2>
-            <div class="admin-panel">
-                <h4 class="fw-bold mb-4">Roadmap Management</h4>
-                <button class="btn btn-primary" onclick="createRoadmap()">
-                    <i class="fas fa-plus me-2"></i>Add New Roadmap
-                </button>
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h2 class="fw-bold">Admin Dashboard</h2>
+                    <p class="text-muted">Manage roadmaps, modules, and tasks</p>
+                </div>
+            </div>
+            
+            <!-- Admin Stats -->
+            <div class="row mb-4" id="admin-stats">
+                <div class="col-md-2">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h4 class="text-primary fw-bold" id="stat-users">0</h4>
+                            <small class="text-muted">Users</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h4 class="text-success fw-bold" id="stat-roadmaps">0</h4>
+                            <small class="text-muted">Roadmaps</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h4 class="text-info fw-bold" id="stat-modules">0</h4>
+                            <small class="text-muted">Modules</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h4 class="text-warning fw-bold" id="stat-tasks">0</h4>
+                            <small class="text-muted">Tasks</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h4 class="text-secondary fw-bold" id="stat-certificates">0</h4>
+                            <small class="text-muted">Certificates</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h4 class="text-dark fw-bold" id="stat-badges">0</h4>
+                            <small class="text-muted">Badges</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Roadmap Management -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 fw-bold">Roadmap Management</h5>
+                        <button class="btn btn-primary" onclick="showCreateRoadmapModal()">
+                            <i class="fas fa-plus me-2"></i>Add New Roadmap
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="admin-roadmaps-list">
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                            <p>Loading roadmaps...</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-
-    <footer class="bg-dark text-white py-5 mt-5">
+    </div>    <footer class="bg-dark text-white py-5 mt-5">
         <div class="container">
             <div class="text-center">
                 <h5 class="fw-bold">LearnPath</h5>
@@ -407,6 +496,119 @@
             </div>
         </div>
     </footer>
+
+    <!-- Admin Modals -->
+    <!-- Create Roadmap Modal -->
+    <div class="modal fade" id="createRoadmapModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Roadmap</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="create-roadmap-form">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Title</label>
+                            <input type="text" class="form-control" id="roadmap-title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" id="roadmap-description" rows="3" required></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Difficulty</label>
+                                    <select class="form-select" id="roadmap-difficulty">
+                                        <option value="Beginner">Beginner</option>
+                                        <option value="Intermediate">Intermediate</option>
+                                        <option value="Advanced">Advanced</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Duration (days)</label>
+                                    <input type="number" class="form-control" id="roadmap-duration" value="30">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create Roadmap</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Module Modal -->
+    <div class="modal fade" id="createModuleModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Module</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="create-module-form">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Module Title</label>
+                            <input type="text" class="form-control" id="module-title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Order</label>
+                            <input type="number" class="form-control" id="module-order" value="1" min="1">
+                        </div>
+                        <input type="hidden" id="module-roadmap-id">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Module</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Task Modal -->
+    <div class="modal fade" id="createTaskModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Task</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="create-task-form">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Task Title</label>
+                            <input type="text" class="form-control" id="task-title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" id="task-description" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Resource URL (optional)</label>
+                            <input type="url" class="form-control" id="task-resource-url" placeholder="https://...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Order</label>
+                            <input type="number" class="form-control" id="task-order" value="1" min="1">
+                        </div>
+                        <input type="hidden" id="task-module-id">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Task</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/app.js"></script>

@@ -92,7 +92,7 @@ CREATE TABLE badges (
 );
 
 INSERT INTO users (username, email, password, role) VALUES 
-('admin', 'admin@learnpath.com', '$2b$10$vOeGU/8FPFJy4F8eELn6SuY7JQ2Y8B4y4F8JY3YJQ4y4F8eELn6Su', 'admin'),
+('admin', 'admin@learnpath.com', '$2b$10$UW6USd49NlM.pyqvgrr/JeLxCLxrXUJ2A0J5ZGhukjTzlr/I1vg6G', 'admin'),
 ('johndoe', 'john.doe@example.com', '$2b$10$vOeGU/8FPFJy4F8eELn6SuY7JQ2Y8B4y4F8JY3YJQ4y4F8eELn6Su', 'user');
 
 INSERT INTO roadmaps (title, description, difficulty, duration, created_by) VALUES 
