@@ -58,6 +58,9 @@ CREATE TABLE user_progress (
     FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 
+-- Ensure ON DUPLICATE KEY works for (user_id, task_id)
+ALTER TABLE user_progress ADD UNIQUE KEY uq_user_task (user_id, task_id);
+
 CREATE TABLE user_roadmaps (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,

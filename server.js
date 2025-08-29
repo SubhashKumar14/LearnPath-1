@@ -444,34 +444,30 @@ app.get('/api/courses/:id', async (req, res) => {
 // User Routes
 app.get('/api/user/stats', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.id;
-        
-        // Get user statistics
-        const [roadmapStats] = await pool.execute(`
-            SELECT 
-                COUNT(DISTINCT up.roadmap_id) as roadmapsStarted,
-                COUNT(DISTINCT CASE WHEN up.completion_percentage = 100 THEN up.roadmap_id END) as roadmapsCompleted
-            FROM user_progress up 
-            WHERE up.user_id = ?
-        `, [userId]);
-
-        const [taskStats] = await pool.execute(`
-            SELECT COUNT(*) as tasksCompleted
-            FROM task_progress tp
-            WHERE tp.user_id = ? AND tp.completed = 1
-        `, [userId]);
-
-        const [badgeStats] = await pool.execute(`
-            SELECT COUNT(*) as badgesEarned
-            FROM badge_requests br
-            WHERE br.user_id = ? AND br.status = 'approved'
-        `, [userId]);
-
+        const userId = req.user.userId;
+        // Roadmaps started/completed
+        const [roadmapRows] = await pool.execute(`
+            SELECT ur.roadmap_id,
+                   COUNT(t.id) as total_tasks,
+                   SUM(CASE WHEN up.completed = 1 THEN 1 ELSE 0 END) as done
+            FROM user_roadmaps ur
+            JOIN roadmaps r ON ur.roadmap_id = r.id
+            LEFT JOIN modules m ON r.id = m.roadmap_id
+            LEFT JOIN tasks t ON m.id = t.module_id
+            LEFT JOIN user_progress up ON up.task_id = t.id AND up.user_id = ur.user_id
+            WHERE ur.user_id = ?
+            GROUP BY ur.roadmap_id`, [userId]);
+        let roadmapsStarted = roadmapRows.length;
+        let roadmapsCompleted = roadmapRows.filter(r => r.total_tasks > 0 && r.total_tasks === r.done).length;
+        const tasksCompleted = roadmapRows.reduce((sum, r) => sum + r.done, 0);
+        const [certCount] = await pool.execute('SELECT COUNT(*) as certificates FROM certificates WHERE user_id = ?', [userId]);
+        const [badgeCount] = await pool.execute('SELECT COUNT(*) as badges FROM badges WHERE user_id = ?', [userId]);
         res.json({
-            roadmapsStarted: roadmapStats[0].roadmapsStarted || 0,
-            roadmapsCompleted: roadmapStats[0].roadmapsCompleted || 0,
-            tasksCompleted: taskStats[0].tasksCompleted || 0,
-            badgesEarned: badgeStats[0].badgesEarned || 0
+            roadmapsStarted,
+            roadmapsCompleted,
+            tasksCompleted,
+            badgesEarned: badgeCount[0].badges || 0,
+            certificatesEarned: certCount[0].certificates || 0
         });
     } catch (error) {
         console.error('Error fetching user stats:', error);
@@ -481,34 +477,26 @@ app.get('/api/user/stats', authenticateToken, async (req, res) => {
 
 app.get('/api/user/activity', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.id;
-        
-        // Get recent activity (task completions, roadmap starts, etc.)
+        const userId = req.user.userId;
         const [activities] = await pool.execute(`
-            SELECT 
-                'task_completed' as type,
-                CONCAT('Completed task in ', r.title) as description,
-                tp.updated_at as created_at
-            FROM task_progress tp
-            JOIN tasks t ON tp.task_id = t.id
-            JOIN modules m ON t.module_id = m.id
-            JOIN roadmaps r ON m.roadmap_id = r.id
-            WHERE tp.user_id = ? AND tp.completed = 1
-            
+            (SELECT 'task_completed' as type,
+                    CONCAT('Completed task: ', t.title, ' (', r.title, ')') as description,
+                    up.completed_at as created_at
+             FROM user_progress up
+             JOIN tasks t ON up.task_id = t.id
+             JOIN modules m ON t.module_id = m.id
+             JOIN roadmaps r ON m.roadmap_id = r.id
+             WHERE up.user_id = ? AND up.completed = 1)
             UNION ALL
-            
-            SELECT 
-                'roadmap_started' as type,
-                CONCAT('Started roadmap: ', r.title) as description,
-                up.created_at
-            FROM user_progress up
-            JOIN roadmaps r ON up.roadmap_id = r.id
-            WHERE up.user_id = ?
-            
+            (SELECT 'roadmap_started' as type,
+                    CONCAT('Started roadmap: ', r.title) as description,
+                    ur.started_at as created_at
+             FROM user_roadmaps ur
+             JOIN roadmaps r ON ur.roadmap_id = r.id
+             WHERE ur.user_id = ?)
             ORDER BY created_at DESC
-            LIMIT 10
+            LIMIT 15
         `, [userId, userId]);
-
         res.json(activities);
     } catch (error) {
         console.error('Error fetching user activity:', error);
@@ -518,21 +506,24 @@ app.get('/api/user/activity', authenticateToken, async (req, res) => {
 
 app.get('/api/user/active-roadmaps', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.id;
-        
-        // Get active roadmaps (started but not completed)
-        const [roadmaps] = await pool.execute(`
-            SELECT 
-                r.*,
-                up.completion_percentage as progress,
-                up.created_at as started_at
-            FROM roadmaps r
-            JOIN user_progress up ON r.id = up.roadmap_id
-            WHERE up.user_id = ? AND up.completion_percentage < 100
-            ORDER BY up.updated_at DESC
+        const userId = req.user.userId;
+        const [rows] = await pool.execute(`
+            SELECT r.id, r.title, r.description, r.difficulty, r.duration,
+                   ur.started_at,
+                   COUNT(t.id) as total_tasks,
+                   SUM(CASE WHEN up.completed = 1 THEN 1 ELSE 0 END) as done
+            FROM user_roadmaps ur
+            JOIN roadmaps r ON ur.roadmap_id = r.id
+            LEFT JOIN modules m ON r.id = m.roadmap_id
+            LEFT JOIN tasks t ON m.id = t.module_id
+            LEFT JOIN user_progress up ON up.task_id = t.id AND up.user_id = ur.user_id
+            WHERE ur.user_id = ?
+            GROUP BY r.id, ur.started_at
+            HAVING total_tasks = 0 OR done < total_tasks
+            ORDER BY ur.started_at DESC
         `, [userId]);
-
-        res.json(roadmaps);
+        const formatted = rows.map(r => ({ ...r, progress: r.total_tasks ? Math.round((r.done / r.total_tasks) * 100) : 0 }));
+        res.json(formatted);
     } catch (error) {
         console.error('Error fetching active roadmaps:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -541,76 +532,52 @@ app.get('/api/user/active-roadmaps', authenticateToken, async (req, res) => {
 
 app.post('/api/badges/request', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user.userId;
         const { roadmapId } = req.body;
-
-        // Check if roadmap is completed
-        const [progress] = await pool.execute(
-            'SELECT completion_percentage FROM user_progress WHERE user_id = ? AND roadmap_id = ?',
-            [userId, roadmapId]
-        );
-
-        if (!progress.length || progress[0].completion_percentage < 100) {
-            return res.status(400).json({ error: 'Roadmap must be completed to request a badge' });
+        // compute completion
+        const [rows] = await pool.execute(`
+            SELECT COUNT(t.id) total_tasks,
+                   SUM(CASE WHEN up.completed = 1 THEN 1 ELSE 0 END) done
+            FROM roadmaps r
+            LEFT JOIN modules m ON r.id = m.roadmap_id
+            LEFT JOIN tasks t ON m.id = t.module_id
+            LEFT JOIN user_progress up ON up.task_id = t.id AND up.user_id = ?
+            WHERE r.id = ?
+            GROUP BY r.id`, [userId, roadmapId]);
+        if(!rows.length || rows[0].total_tasks === 0 || rows[0].done < rows[0].total_tasks){
+            return res.status(400).json({ error: 'Complete all tasks before requesting a badge' });
         }
-
-        // Check if badge already requested
-        const [existing] = await pool.execute(
-            'SELECT id FROM badge_requests WHERE user_id = ? AND roadmap_id = ?',
-            [userId, roadmapId]
-        );
-
-        if (existing.length > 0) {
-            return res.status(400).json({ error: 'Badge already requested for this roadmap' });
-        }
-
-        // Create badge request
-        await pool.execute(
-            'INSERT INTO badge_requests (user_id, roadmap_id, status) VALUES (?, ?, ?)',
-            [userId, roadmapId, 'pending']
-        );
-
-        res.json({ message: 'Badge request submitted successfully' });
+        // create badge immediately (simplified)
+        const badgeUrl = `/badges/${userId}_${roadmapId}_${Date.now()}.png`;
+        await pool.execute('INSERT INTO badges (user_id, roadmap_id, badge_url) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE badge_url = VALUES(badge_url), issued_at = NOW()', [userId, roadmapId, badgeUrl]);
+        res.json({ message: 'Badge issued successfully', badgeUrl });
     } catch (error) {
-        console.error('Error requesting badge:', error);
+        console.error('Error issuing badge:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 app.post('/api/certificates/request', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user.userId;
         const { roadmapId } = req.body;
-
-        // Check if roadmap is completed
-        const [progress] = await pool.execute(
-            'SELECT completion_percentage FROM user_progress WHERE user_id = ? AND roadmap_id = ?',
-            [userId, roadmapId]
-        );
-
-        if (!progress.length || progress[0].completion_percentage < 100) {
-            return res.status(400).json({ error: 'Roadmap must be completed to request a certificate' });
+        const [rows] = await pool.execute(`
+            SELECT COUNT(t.id) total_tasks,
+                   SUM(CASE WHEN up.completed = 1 THEN 1 ELSE 0 END) done
+            FROM roadmaps r
+            LEFT JOIN modules m ON r.id = m.roadmap_id
+            LEFT JOIN tasks t ON m.id = t.module_id
+            LEFT JOIN user_progress up ON up.task_id = t.id AND up.user_id = ?
+            WHERE r.id = ?
+            GROUP BY r.id`, [userId, roadmapId]);
+        if(!rows.length || rows[0].total_tasks === 0 || rows[0].done < rows[0].total_tasks){
+            return res.status(400).json({ error: 'Complete all tasks before requesting a certificate' });
         }
-
-        // Check if certificate already requested
-        const [existing] = await pool.execute(
-            'SELECT id FROM certificate_requests WHERE user_id = ? AND roadmap_id = ?',
-            [userId, roadmapId]
-        );
-
-        if (existing.length > 0) {
-            return res.status(400).json({ error: 'Certificate already requested for this roadmap' });
-        }
-
-        // Create certificate request
-        await pool.execute(
-            'INSERT INTO certificate_requests (user_id, roadmap_id, status) VALUES (?, ?, ?)',
-            [userId, roadmapId, 'pending']
-        );
-
-        res.json({ message: 'Certificate request submitted successfully' });
+        const certificateUrl = `/certificates/${userId}_${roadmapId}_${Date.now()}.pdf`;
+        await pool.execute('INSERT INTO certificates (user_id, roadmap_id, certificate_url) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE certificate_url = VALUES(certificate_url), issued_at = NOW()', [userId, roadmapId, certificateUrl]);
+        res.json({ message: 'Certificate issued successfully', certificateUrl });
     } catch (error) {
-        console.error('Error requesting certificate:', error);
+        console.error('Error issuing certificate:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
