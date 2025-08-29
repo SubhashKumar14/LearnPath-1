@@ -1,3 +1,108 @@
+# 📊 Project Plan vs Implementation Status (Conversation-Derived Summary)
+This section was generated from the full build conversation. It reconciles what you originally planned, what has been delivered, and what remains (explicitly mentioned or implicitly agreed) so future contributors have instant project context.
+
+### 1. Originally Planned / Requested
+Core functional asks:
+* Single administrator model (only one admin user in system).
+* Admin-only functionality strictly gated (UI + backend middleware).
+* Dynamic profile avatar initials derived from first (or full) username instead of placeholder "JD".
+* Reliable logout: clear session state, remove any default user artifacts, redirect / gate protected screens.
+* Comprehensive README with architecture + usage + API overview.
+* Consolidate scattered SQL fragments (fix-admin, update-schema, etc.) into a single authoritative `schema.sql` file.
+* Remove legacy / test / helper SQL and JS scripts after consolidation.
+* Clean repository footprint to essentials only.
+
+Enhancement / forward-looking items raised during discussion:
+* Proper automated test suite (unit + integration) & future CI pipeline.
+* Password reset & email verification flows.
+* Real badge & certificate asset generation (PDF/PNG) instead of placeholder URLs.
+* Multi-admin / instructor / role expansion model (beyond single admin).
+* Rate limiting + audit logging + stronger security headers.
+* Frontend modularization (split `app.js`, introduce bundler) + accessibility improvements.
+* Database migration strategy (move beyond monolithic schema file).
+* Analytics & richer stats (per-module progress trends, completion curves).
+* Pagination, search, filtering for large roadmap sets.
+* Internationalization (i18n), dark mode, notification system (email / in-app), user engagement features.
+* LICENSE and CONTRIBUTING guidelines addition.
+* Potential shift of JWT storage to httpOnly cookies for improved security.
+
+### 2. Delivered (Implemented & Verified)
+* Single admin account seeded & enforced (`role='admin'`).
+* Middleware-based role gating (`authenticateToken`, `requireAdmin`) + UI hiding of admin panels.
+* Dynamic avatar initials generation in frontend (`getUserInitials` logic in `app.js`).
+* Hardened logout: clears localStorage, hides protected sections, prevents phantom access.
+* Expanded, detailed README (architecture, schema, API, security, troubleshooting, roadmap).
+* Unified `schema.sql` containing base schema, seeds, password hash fix, optional prototype tables.
+* Removal of deprecated test/helper files (integration & test scripts, auxiliary SQL, setup helpers) — repository slimmed.
+* Badge / certificate request endpoints (prototype issuing logic with placeholder asset URLs).
+* Admin dashboard statistics endpoint & UI integration.
+* Progress tracking (task-level) & activity feed endpoints.
+* Roadmap/module/task CRUD with ordered hierarchy.
+* Profile fetch/update endpoints with password hashing.
+* Readme further enhanced with deployment, security, extensibility, troubleshooting matrices.
+
+### 3. Partially Addressed / Foundations Laid
+* Prototype credential tables (`badges`, `certificates`) exist; real asset generation not yet implemented.
+* Optional prototype tables for courses & lessons created (not yet wired to API routes).
+* Basic security (bcrypt, JWT expiry, parameterized queries) present; advanced controls pending.
+
+### 4. Outstanding / Future (Explicitly Discussed but Not Yet Implemented)
+Security & Auth:
+* Rate limiting, audit logging, stronger password policies, password reset, email verification, potential MFA.
+* JWT refresh / rotation strategy & migration from localStorage to httpOnly secure cookies.
+
+Testing & Quality:
+* Automated unit/API test suite (Jest/Vitest + Supertest) & coverage thresholds.
+* CI workflow (GitHub Actions) for build/lint/test gates.
+
+Content & Features:
+* Multi-admin / instructor roles & delegated content workflows.
+* Course / lesson API endpoints leveraging prototype tables.
+* Search, pagination, filtering for roadmaps and tasks.
+* Analytics dashboards (engagement, completion funnels, per-module curves).
+* Notification & email system (progress milestones, credential issuance).
+* Real badge image & certificate PDF generation pipeline (possibly microservice or library integration).
+
+Frontend & UX:
+* Modular refactor of `public/js/app.js` (ES modules + bundler like Vite/Rollup).
+* Accessibility audit (WCAG), dark mode, i18n framework integration.
+* Componentization / state management improvements.
+
+Data & Operations:
+* Migration tooling (Prisma / Knex / Flyway) to replace monolithic schema file.
+* Additional indexing & query optimization for scale.
+* Structured logging, metrics, and health/observability stack.
+* Backup automation & disaster recovery playbook.
+
+Governance & Compliance:
+* Add `LICENSE` file (MIT planned) & `CONTRIBUTING.md` guidelines.
+* Security policy / responsible disclosure doc.
+
+### 5. Notable Architectural Decisions
+* Chose single-admin simplicity over multi-role complexity for MVP speed.
+* Vanilla JS SPA (no framework) to minimize onboarding complexity — tradeoff: larger `app.js` file and reduced modularity.
+* Monolithic Express file (`server.js`) for velocity; planned future extraction into route modules/services.
+* Single consolidated schema over incremental migrations — acceptable for early stage, flagged for change.
+* LocalStorage JWT storage for simplicity with understanding of XSS tradeoffs (roadmap includes mitigation path).
+
+### 6. Technical Debt / Risk Hotspots
+| Area | Risk | Mitigation Path |
+| ---- | ---- | --------------- |
+| Auth brute force | No rate limiting | Add `express-rate-limit` + account lock logic |
+| Token storage | XSS exposure potential | Move to httpOnly secure cookies + CSP & Helmet |
+| Large server file | Maintainability | Refactor into routers/controllers/services |
+| Lack of tests | Regression risk | Introduce Jest + Supertest early |
+| Schema evolution | Manual edits risk drift | Adopt migration tool |
+
+### 7. Immediate Next Step Suggestions (Actionable Shortlist)
+1. Add LICENSE + CONTRIBUTING to formalize repo.
+2. Introduce Jest + Supertest smoke tests (login, create roadmap, toggle progress).
+3. Apply `helmet` + `express-rate-limit` for quick security uplift.
+4. Split `server.js` into `routes/` modules incrementally.
+5. Implement real credential generation placeholder service interface (contract first).
+
+---
+
 # LearnPath – Structured Roadmap Learning Platform
 
 LearnPath is a lightweight full‑stack learning platform for publishing and tracking structured learning roadmaps (→ modules → tasks). Learners enrol, toggle granular task completion, and (prototype) request badges/certificates after finishing a roadmap. A single protected admin account manages all roadmap content through the same SPA UX. The stack intentionally stays minimal (Express + MySQL + Vanilla JS) to maximize clarity and approachability.
