@@ -160,6 +160,17 @@ CREATE TABLE IF NOT EXISTS certificate_requests (
     FOREIGN KEY (reviewed_by) REFERENCES users(id)
 );
 
+-- Optional extended metadata columns (idempotent; ignore errors if already exist)
+ALTER TABLE badge_requests 
+    ADD COLUMN IF NOT EXISTS recipient_name VARCHAR(255) NULL,
+    ADD COLUMN IF NOT EXISTS roadmap_name VARCHAR(255) NULL,
+    ADD COLUMN IF NOT EXISTS completion_date DATE NULL;
+
+ALTER TABLE certificate_requests 
+    ADD COLUMN IF NOT EXISTS recipient_name VARCHAR(255) NULL,
+    ADD COLUMN IF NOT EXISTS course_name VARCHAR(255) NULL,
+    ADD COLUMN IF NOT EXISTS completion_date DATE NULL;
+
 -- Courses (prototype, not yet exposed via API)
 CREATE TABLE IF NOT EXISTS courses (
     id INT AUTO_INCREMENT PRIMARY KEY,
