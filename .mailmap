@@ -1,0 +1,3 @@
+# Maps old author identity to new identity so tools (including GitLens) display unified author.
+# Format: New Name <new-email> Old Name <old-email>
+SubhashKumar14 <subhash1403kumar@gmail.com> Yeshwanth-1729 <your-email@example.com>
