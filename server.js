@@ -64,7 +64,7 @@ app.post('/api/login', async (req, res) => {
         }
 
         const [users] = await pool.execute(
-            'SELECT id, username, email, password, role FROM users WHERE email = ?',
+            'SELECT id, username, email, password, role, created_at FROM users WHERE email = ?',
             [email]
         );
 
@@ -90,7 +90,8 @@ app.post('/api/login', async (req, res) => {
                 id: user.id,
                 username: user.username,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                created_at: user.created_at
             }
         });
 
@@ -100,20 +101,70 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// Roadmap Routes
+// Profile Routes (missing previously)
+app.get('/api/profile', authenticateToken, async (req, res) => {
+    try {
+        const [users] = await pool.execute(
+            'SELECT id, username, email, role, created_at FROM users WHERE id = ?',
+            [req.user.userId]
+        );
+        if (!users.length) return res.status(404).json({ error: 'User not found' });
+
+        const [stats] = await pool.execute(`
+            SELECT 
+                COUNT(DISTINCT ur.roadmap_id) as roadmaps_started,
+                COUNT(DISTINCT CASE WHEN ur.completed_at IS NOT NULL THEN ur.roadmap_id END) as roadmaps_completed,
+                COUNT(DISTINCT up.task_id) as tasks_completed,
+                COUNT(DISTINCT c.id) as certificates_earned
+            FROM users u
+            LEFT JOIN user_roadmaps ur ON u.id = ur.user_id
+            LEFT JOIN user_progress up ON u.id = up.user_id AND up.completed = TRUE
+            LEFT JOIN certificates c ON u.id = c.user_id
+            WHERE u.id = ?
+        `, [req.user.userId]);
+
+        res.json({ ...users[0], stats: stats[0] });
+    } catch (e) {
+        console.error('Profile fetch error:', e);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.put('/api/profile', authenticateToken, async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+        if (!username || !email) return res.status(400).json({ error: 'Username and email are required' });
+        const userId = req.user.userId;
+        const [existing] = await pool.execute('SELECT id FROM users WHERE email = ? AND id != ?', [email, userId]);
+        if (existing.length) return res.status(400).json({ error: 'Email already taken' });
+        if (password && password.trim()) {
+            const hashed = await bcrypt.hash(password, 10);
+            await pool.execute('UPDATE users SET username = ?, email = ?, password = ? WHERE id = ?', [username, email, hashed, userId]);
+        } else {
+            await pool.execute('UPDATE users SET username = ?, email = ? WHERE id = ?', [username, email, userId]);
+        }
+        res.json({ message: 'Profile updated successfully' });
+    } catch (e) {
+        console.error('Profile update error:', e);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Roadmap Routes (enhanced with module/task counts)
 app.get('/api/roadmaps', async (req, res) => {
     try {
-        console.log('📍 GET /api/roadmaps endpoint hit');
-        
-        // Simplified query first to test
-        const [roadmaps] = await pool.execute('SELECT * FROM roadmaps ORDER BY created_at DESC');
-        
-        console.log(`📊 Found ${roadmaps.length} roadmaps`);
-        console.log('📤 Sending response...');
-        
+        const [roadmaps] = await pool.execute(`
+            SELECT r.*, u.username as creator_name,
+                   COUNT(DISTINCT m.id) as module_count,
+                   COUNT(DISTINCT t.id) as task_count
+            FROM roadmaps r 
+            LEFT JOIN users u ON r.created_by = u.id
+            LEFT JOIN modules m ON r.id = m.roadmap_id
+            LEFT JOIN tasks t ON m.id = t.module_id
+            GROUP BY r.id
+            ORDER BY r.created_at DESC
+        `);
         res.json(roadmaps);
-        
-        console.log('✅ Response sent successfully');
     } catch (error) {
         console.error('❌ Error fetching roadmaps:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -123,40 +174,24 @@ app.get('/api/roadmaps', async (req, res) => {
 app.get('/api/roadmaps/:id', async (req, res) => {
     try {
         const roadmapId = req.params.id;
-
-        const [roadmaps] = await pool.execute(
-            'SELECT * FROM roadmaps WHERE id = ?',
-            [roadmapId]
-        );
-
-        if (roadmaps.length === 0) {
-            return res.status(404).json({ error: 'Roadmap not found' });
-        }
-
-        const [modules] = await pool.execute(`
-            SELECT m.*, 
-                   JSON_ARRAYAGG(
-                       JSON_OBJECT(
-                           'id', t.id,
-                           'title', t.title,
-                           'description', t.description,
-                           'resource_url', t.resource_url,
-                           'order_index', t.order_index
-                       )
-                   ) as tasks
+        const [roadmaps] = await pool.execute('SELECT * FROM roadmaps WHERE id = ?', [roadmapId]);
+        if (!roadmaps.length) return res.status(404).json({ error: 'Roadmap not found' });
+        const [rows] = await pool.execute(`
+            SELECT m.id as module_id, m.title as module_title, m.order_index as module_order,
+                   t.id as task_id, t.title as task_title, t.description, t.resource_url, t.order_index as task_order
             FROM modules m
             LEFT JOIN tasks t ON m.id = t.module_id
             WHERE m.roadmap_id = ?
-            GROUP BY m.id
-            ORDER BY m.order_index
+            ORDER BY m.order_index, t.order_index
         `, [roadmapId]);
-
-        const roadmap = {
-            ...roadmaps[0],
-            modules: modules
-        };
-
-        res.json(roadmap);
+        const moduleMap = {};
+        rows.forEach(r => {
+            if (!moduleMap[r.module_id]) {
+                moduleMap[r.module_id] = { id: r.module_id, title: r.module_title, order_index: r.module_order, tasks: [] };
+            }
+            if (r.task_id) moduleMap[r.module_id].tasks.push({ id: r.task_id, title: r.task_title, description: r.description, resource_url: r.resource_url, order_index: r.task_order });
+        });
+        res.json({ ...roadmaps[0], modules: Object.values(moduleMap) });
     } catch (error) {
         console.error('Error fetching roadmap:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -165,21 +200,66 @@ app.get('/api/roadmaps/:id', async (req, res) => {
 
 app.post('/api/roadmaps', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const { title, description, difficulty, duration } = req.body;
-
-        if (!title || !description) {
-            return res.status(400).json({ error: 'Title and description are required' });
+        const { title, description, difficulty, duration, modules } = req.body;
+        if (!title || !description) return res.status(400).json({ error: 'Title and description are required' });
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            const [roadmapResult] = await conn.execute(
+                'INSERT INTO roadmaps (title, description, difficulty, duration, created_by) VALUES (?, ?, ?, ?, ?)',
+                [title, description, difficulty, duration, req.user.userId]
+            );
+            const roadmapId = roadmapResult.insertId;
+            if (Array.isArray(modules)) {
+                for (let i = 0; i < modules.length; i++) {
+                    const mod = modules[i];
+                    const [modResult] = await conn.execute('INSERT INTO modules (roadmap_id, title, order_index) VALUES (?, ?, ?)', [roadmapId, mod.title, i + 1]);
+                    const moduleId = modResult.insertId;
+                    if (Array.isArray(mod.tasks)) {
+                        for (let j = 0; j < mod.tasks.length; j++) {
+                            const task = mod.tasks[j];
+                            await conn.execute('INSERT INTO tasks (module_id, title, description, resource_url, order_index) VALUES (?, ?, ?, ?, ?)', [moduleId, task.title, task.description || '', task.resource_url || '', j + 1]);
+                        }
+                    }
+                }
+            }
+            await conn.commit();
+            res.status(201).json({ message: 'Roadmap created successfully', roadmapId });
+        } catch (e) {
+            await conn.rollback();
+            throw e;
+        } finally {
+            conn.release();
         }
-
-        const [result] = await pool.execute(
-            'INSERT INTO roadmaps (title, description, difficulty, duration, created_by) VALUES (?, ?, ?, ?, ?)',
-            [title, description, difficulty, duration, req.user.userId]
-        );
-
-        res.status(201).json({ message: 'Roadmap created successfully', roadmapId: result.insertId });
-
     } catch (error) {
         console.error('Error creating roadmap:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update roadmap
+app.put('/api/roadmaps/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, description, difficulty, duration } = req.body;
+        const [result] = await pool.execute('UPDATE roadmaps SET title = ?, description = ?, difficulty = ?, duration = ? WHERE id = ?', [title, description, difficulty, duration, id]);
+        if (!result.affectedRows) return res.status(404).json({ error: 'Roadmap not found' });
+        res.json({ message: 'Roadmap updated successfully' });
+    } catch (e) {
+        console.error('Error updating roadmap:', e);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Delete roadmap
+app.delete('/api/roadmaps/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await pool.execute('DELETE FROM roadmaps WHERE id = ?', [id]);
+        if (!result.affectedRows) return res.status(404).json({ error: 'Roadmap not found' });
+        res.json({ message: 'Roadmap deleted successfully' });
+    } catch (e) {
+        console.error('Error deleting roadmap:', e);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -197,6 +277,7 @@ app.get('/api/progress/:userId', authenticateToken, async (req, res) => {
             SELECT 
                 ur.roadmap_id,
                 r.title as roadmap_title,
+                r.duration,
                 ur.started_at,
                 ur.completed_at,
                 COUNT(t.id) as total_tasks,
@@ -220,8 +301,14 @@ app.get('/api/progress/:userId', authenticateToken, async (req, res) => {
 
 app.post('/api/progress/task', authenticateToken, async (req, res) => {
     try {
-        const { taskId, completed } = req.body;
+        let { taskId, completed } = req.body;
         const userId = req.user.userId;
+
+        // If 'completed' not provided (legacy frontend), toggle based on existing state.
+        if (typeof completed === 'undefined') {
+            const [rows] = await pool.execute('SELECT completed FROM user_progress WHERE user_id = ? AND task_id = ?', [userId, taskId]);
+            completed = !(rows.length && rows[0].completed === 1);
+        }
 
         if (completed) {
             await pool.execute(
@@ -234,10 +321,31 @@ app.post('/api/progress/task', authenticateToken, async (req, res) => {
                 [userId, taskId]
             );
         }
-
-        res.json({ message: 'Progress updated successfully' });
+        res.json({ message: 'Progress updated successfully', completed });
     } catch (error) {
         console.error('Error updating progress:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Roadmap-specific progress map
+app.get('/api/roadmaps/:id/progress', authenticateToken, async (req, res) => {
+    try {
+        const roadmapId = req.params.id;
+        const userId = req.user.userId;
+        const [rows] = await pool.execute(`
+            SELECT t.id as task_id, up.completed
+            FROM roadmaps r
+            JOIN modules m ON r.id = m.roadmap_id
+            JOIN tasks t ON m.id = t.module_id
+            LEFT JOIN user_progress up ON t.id = up.task_id AND up.user_id = ?
+            WHERE r.id = ?
+        `, [userId, roadmapId]);
+        const map = {};
+        rows.forEach(r => { map[r.task_id] = r.completed === 1; });
+        res.json(map);
+    } catch (e) {
+        console.error('Error fetching roadmap progress:', e);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

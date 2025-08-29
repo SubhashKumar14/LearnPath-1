@@ -1,8 +1,8 @@
 // Global variables
 let currentUser = null;
-let roadmaps = [];
 let currentRoadmap = null;
-let userProgress = null;
+let roadmaps = [];
+let userProgress = {};
 
 // API base URL
 const API_BASE = '/api';
@@ -15,9 +15,9 @@ document.addEventListener('DOMContentLoaded', function() {
 // Initialize application
 function initializeApp() {
     checkAuthStatus();
-    loadRoadmaps();
     setupEventListeners();
-
+    // Always load roadmaps for public viewing
+    loadRoadmaps();
     if (!currentUser) {
         showPage('home-page');
     }
@@ -27,13 +27,26 @@ function initializeApp() {
 function checkAuthStatus() {
     const token = localStorage.getItem('authToken');
     const userData = localStorage.getItem('userData');
-
     if (token && userData) {
-        currentUser = JSON.parse(userData);
-        updateUIForAuthenticatedUser();
+        try {
+            currentUser = JSON.parse(userData);
+            updateUIForAuthenticatedUser();
+            validateToken();
+        } catch (e) {
+            console.error('User data parse error', e);
+            logout();
+        }
     } else {
         updateUIForAnonymousUser();
     }
+}
+
+// Validate token
+async function validateToken() {
+    try {
+        const res = await fetch(`${API_BASE}/profile`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }});
+        if (!res.ok) logout();
+    } catch (e) { logout(); }
 }
 
 // Update UI for authenticated user
@@ -41,13 +54,9 @@ function updateUIForAuthenticatedUser() {
     document.getElementById('user-section').style.display = 'flex';
     document.getElementById('auth-section').style.display = 'none';
     document.getElementById('progress-nav').style.display = 'block';
-
-    if (currentUser.role === 'admin') {
-        document.getElementById('admin-nav').style.display = 'block';
-    }
-
+    if (currentUser.role === 'admin') document.getElementById('admin-nav').style.display = 'block';
     document.getElementById('user-name').textContent = currentUser.username;
-    document.getElementById('user-avatar').textContent = currentUser.username.substring(0, 2).toUpperCase();
+    document.getElementById('user-avatar').textContent = getUserInitials(currentUser.username);
 }
 
 // Update UI for anonymous user
@@ -61,14 +70,15 @@ function updateUIForAnonymousUser() {
 // Setup event listeners
 function setupEventListeners() {
     const loginForm = document.getElementById('login-form');
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleLogin);
-    }
-
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
     const registerForm = document.getElementById('register-form');
-    if (registerForm) {
-        registerForm.addEventListener('submit', handleRegister);
-    }
+    if (registerForm) registerForm.addEventListener('submit', handleRegister);
+    const profileForm = document.getElementById('profile-form');
+    if (profileForm) profileForm.addEventListener('submit', handleProfileUpdate);
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.addEventListener('input', filterRoadmaps);
+    const difficultyFilter = document.getElementById('difficulty-filter');
+    if (difficultyFilter) difficultyFilter.addEventListener('change', filterRoadmaps);
 }
 
 // Handle login
@@ -99,9 +109,10 @@ async function handleLogin(e) {
             localStorage.setItem('userData', JSON.stringify(data.user));
             currentUser = data.user;
 
-            showAlert('Login successful!', 'success');
+            showAlert('Login successful! Welcome back!', 'success');
             updateUIForAuthenticatedUser();
             showPage('home-page');
+            document.getElementById('login-form').reset();
         } else {
             showAlert(data.error || 'Login failed', 'danger');
         }
@@ -147,6 +158,7 @@ async function handleRegister(e) {
         if (response.ok) {
             showAlert('Account created successfully! Please log in.', 'success');
             showPage('login-page');
+            document.getElementById('login-email').value = email;
         } else {
             showAlert(data.error || 'Registration failed', 'danger');
         }
@@ -158,6 +170,26 @@ async function handleRegister(e) {
         submitBtn.disabled = false;
     }
 }
+
+// Handle profile update
+async function handleProfileUpdate(e){
+    e.preventDefault();
+    if(!currentUser) return showAlert('Login first','warning');
+    const username = document.getElementById('profile-username').value;
+    const email = document.getElementById('profile-email').value;
+    const password = document.getElementById('profile-password').value;
+    const btn = e.target.querySelector('button[type="submit"]');
+    const orig = btn.innerHTML; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Updating...'; btn.disabled = true;
+    try {
+        const res = await fetch(`${API_BASE}/profile`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({username,email,password})});
+        const data = await res.json();
+        if(res.ok){ currentUser.username = username; currentUser.email = email; localStorage.setItem('userData',JSON.stringify(currentUser)); updateUIForAuthenticatedUser(); loadProfileData(); showAlert('Profile updated successfully!','success'); document.getElementById('profile-password').value=''; } else { showAlert(data.error||'Profile update failed','danger'); }
+    }catch(err){ console.error(err); showAlert('Connection error','danger'); } finally { btn.innerHTML=orig; btn.disabled=false; }
+}
+
+// Load profile data
+async function loadProfileData(){
+    if(!currentUser) return; try { const res = await fetch(`${API_BASE}/profile`,{headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ const profile = await res.json(); document.getElementById('profile-username').value = profile.username; document.getElementById('profile-email').value = profile.email; document.getElementById('profile-name').textContent = profile.username; document.getElementById('profile-avatar').textContent = getUserInitials(profile.username); if(profile.stats){ const stats = profile.stats; const statRow = document.querySelector('#profile-page .row:last-child'); if(statRow){ statRow.innerHTML = '';} } } } catch(e){ console.error('Profile load error',e);} }
 
 // Load roadmaps from API
 async function loadRoadmaps() {
@@ -181,9 +213,8 @@ async function loadRoadmaps() {
 function displayRoadmaps(roadmapsData) {
     const container = document.getElementById('roadmaps-container');
     if (!container) return;
-
     container.innerHTML = '';
-
+    if(!roadmapsData.length){ container.innerHTML = '<div class="col-12"><p class="text-center text-muted">No roadmaps found.</p></div>'; return; }
     roadmapsData.forEach(roadmap => {
         const difficulty = roadmap.difficulty || 'Beginner';
         const badgeClass = difficulty === 'Beginner' ? 'bg-success' : 
@@ -253,26 +284,46 @@ function displayFeaturedRoadmaps(roadmapsData) {
     });
 }
 
-// View roadmap details
-function viewRoadmap(roadmapId) {
-    if (!currentUser) {
-        showAlert('Please log in to view roadmap details', 'warning');
-        showPage('login-page');
-        return;
-    }
-
-    showAlert('Roadmap details feature coming soon!', 'info');
+// Filter roadmaps
+function filterRoadmaps(){
+    const term = document.getElementById('search-input')?.value.toLowerCase()||'';
+    const diff = document.getElementById('difficulty-filter')?.value||'All Difficulties';
+    const filtered = roadmaps.filter(r=> (r.title.toLowerCase().includes(term) || (r.description||'').toLowerCase().includes(term)) && (diff==='All Difficulties' || r.difficulty===diff));
+    displayRoadmaps(filtered);
 }
+
+// View roadmap details
+async function viewRoadmap(roadmapId){
+    try { const res = await fetch(`${API_BASE}/roadmaps/${roadmapId}`); const data = await res.json(); if(res.ok){ currentRoadmap = data; if(currentUser){ await loadRoadmapProgress(roadmapId);} displayRoadmapDetails(data); showPage('roadmap-detail-page'); } else { showAlert('Error loading roadmap details','danger'); } } catch(e){ console.error(e); showAlert('Connection error loading roadmap','danger'); }
+}
+
+async function loadRoadmapProgress(roadmapId){ if(!currentUser) return; try { const res = await fetch(`${API_BASE}/roadmaps/${roadmapId}/progress`,{headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ userProgress[currentUser.id] = await res.json(); } } catch(e){ console.error('Progress load error',e);} }
+
+function displayRoadmapDetails(roadmap){
+    document.getElementById('roadmap-detail-title').textContent = roadmap.title;
+    document.getElementById('roadmap-detail-description').textContent = roadmap.description || 'No description available';
+    document.getElementById('roadmap-detail-difficulty').textContent = roadmap.difficulty || 'Beginner';
+    document.getElementById('roadmap-detail-duration').textContent = roadmap.duration || 30;
+    document.getElementById('roadmap-breadcrumb').textContent = roadmap.title;
+    // count tasks
+    let totalTasks=0, completedTasks=0; (roadmap.modules||[]).forEach(m=>{ (m.tasks||[]).forEach(t=>{ totalTasks++; if(currentUser && userProgress[currentUser.id] && userProgress[currentUser.id][t.id]) completedTasks++; }); });
+    document.getElementById('roadmap-detail-task-count').textContent = totalTasks;
+    const pct = totalTasks? Math.round((completedTasks/totalTasks)*100):0;
+    document.getElementById('roadmap-progress-bar').style.width = pct+'%';
+    document.getElementById('roadmap-progress-text').textContent = pct+'% Complete';
+    displayRoadmapModules(roadmap.modules||[]);
+    const startBtn = document.getElementById('start-roadmap-btn');
+    if(!currentUser){ startBtn.textContent='Login to Start'; startBtn.onclick=()=>showPage('login-page'); } else if(completedTasks>0){ startBtn.textContent='Continue Learning'; startBtn.onclick=()=>startRoadmap(); } else { startBtn.textContent='Start Learning'; startBtn.onclick=()=>startRoadmap(); }
+}
+
+function displayRoadmapModules(modules){ const container = document.getElementById('roadmap-modules'); if(!container) return; if(!modules.length){ container.innerHTML='<div class="text-center text-muted py-5"><i class="fas fa-puzzle-piece fa-2x mb-3"></i><p>No modules available.</p></div>'; return; } container.innerHTML = modules.map((m,i)=>`<div class="card mb-4"><div class="card-header"><h5 class="fw-bold mb-0"><span class="module-number me-2">${i+1}</span>${m.title}</h5></div><div class="card-body"><div class="tasks-list">${(m.tasks||[]).map(t=>{ const done = currentUser && userProgress[currentUser.id] && userProgress[currentUser.id][t.id]; return `<div class='task-item d-flex align-items-start gap-2 py-2 border-bottom ${done?'task-completed':''}'><div><input type='checkbox' class='form-check-input' id='task-${t.id}' ${done?'checked':''} ${currentUser?`onchange="updateTaskProgress(${t.id}, this.checked)"`:'disabled'}></div><div class='flex-grow-1'><label for='task-${t.id}' class='form-check-label fw-medium'>${t.title}</label>${t.description?`<small class='d-block text-muted'>${t.description}</small>`:''}${t.resource_url?`<a href='${t.resource_url}' target='_blank' class='btn btn-sm btn-outline-primary mt-1'><i class='fas fa-external-link-alt me-1'></i>Resource</a>`:''}</div></div>`; }).join('') || '<p class="text-muted">No tasks.</p>'}</div></div></div>`).join(''); }
+
+async function updateTaskProgress(taskId, completed){ if(!currentUser){ showAlert('Login to track progress','warning'); return; } try { const res = await fetch(`${API_BASE}/progress/task`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({taskId, completed})}); if(res.ok){ if(!userProgress[currentUser.id]) userProgress[currentUser.id]={}; if(completed) userProgress[currentUser.id][taskId]=true; else delete userProgress[currentUser.id][taskId]; if(currentRoadmap) displayRoadmapDetails(currentRoadmap); showAlert(completed?'Task completed! 🎉':'Task marked incomplete','success'); } else { const data = await res.json(); showAlert(data.error||'Error updating progress','danger'); const cb=document.getElementById(`task-${taskId}`); if(cb) cb.checked=!completed; } } catch(e){ console.error(e); showAlert('Connection error','danger'); const cb=document.getElementById(`task-${taskId}`); if(cb) cb.checked=!completed; } }
+
+async function startRoadmap(){ if(!currentUser) { showAlert('Login first','warning'); return;} if(!currentRoadmap){ showAlert('No roadmap selected','danger'); return;} try { const res = await fetch(`${API_BASE}/roadmaps/${currentRoadmap.id}/start`,{method:'POST',headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ showAlert('Roadmap started!','success'); const btn=document.getElementById('start-roadmap-btn'); if(btn) btn.textContent='Continue Learning'; } else { const data = await res.json(); showAlert(data.error||'Error starting roadmap','danger'); } } catch(e){ showAlert('Connection error','danger'); }}
 
 // Create roadmap (admin function)
-function createRoadmap() {
-    if (!currentUser || currentUser.role !== 'admin') {
-        showAlert('Admin access required', 'danger');
-        return;
-    }
-
-    showAlert('Create roadmap feature coming soon!', 'info');
-}
+async function createRoadmap(){ if(!currentUser||currentUser.role!=='admin') return showAlert('Admin access required','danger'); showAlert('Admin creation UI not implemented yet','info'); }
 
 // Show page
 function showPage(pageId) {
@@ -298,89 +349,14 @@ function showPage(pageId) {
 }
 
 // Logout
-function logout() {
-    if (confirm('Are you sure you want to logout?')) {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('userData');
-        currentUser = null;
-        updateUIForAnonymousUser();
-        showPage('home-page');
-        showAlert('Logged out successfully!', 'success');
-    }
-}
+function logout(){ if(confirm('Are you sure you want to logout?')){ localStorage.removeItem('authToken'); localStorage.removeItem('userData'); currentUser=null; currentRoadmap=null; userProgress={}; updateUIForAnonymousUser(); showPage('home-page'); showAlert('Logged out successfully!','success'); loadRoadmaps(); }}
 
 // Show alert
-function showAlert(message, type = 'info') {
-    const existingAlerts = document.querySelectorAll('.alert');
-    existingAlerts.forEach(alert => alert.remove());
+function showAlert(message,type='info'){ document.querySelectorAll('.alert-custom').forEach(a=>a.remove()); const alert=document.createElement('div'); alert.className=`alert alert-${type} alert-dismissible fade show position-fixed alert-custom`; alert.style.cssText='top:20px;right:20px;z-index:9999;max-width:400px;box-shadow:0 4px 12px rgba(0,0,0,0.15);'; alert.innerHTML=`${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`; document.body.appendChild(alert); setTimeout(()=>{ if(alert.parentNode) alert.remove(); },5000); }
 
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
-    alert.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
+// Removed old profile loader (replaced by loadProfileData + specific calls)
 
-    document.body.appendChild(alert);
-
-    setTimeout(() => {
-        if (alert && alert.parentNode) {
-            alert.remove();
-        }
-    }, 5000);
-}
-
-// Load user profile data
-async function loadUserProfile() {
-    if (!currentUser) return;
-
-    try {
-        // Load user statistics and progress
-        const [progressResponse, statsResponse] = await Promise.all([
-            fetch(`${API_BASE}/progress/${currentUser.id}`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            }),
-            fetch(`${API_BASE}/user/stats`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            })
-        ]);
-
-        const progressData = progressResponse.ok ? await progressResponse.json() : null;
-        const statsData = statsResponse.ok ? await statsResponse.json() : null;
-
-        updateProfileUI(progressData, statsData);
-    } catch (error) {
-        console.error('Error loading profile:', error);
-    }
-}
-
-// Update profile UI
-function updateProfileUI(progressData, statsData) {
-    document.getElementById('profile-name').textContent = currentUser.username;
-    document.getElementById('profile-email').textContent = currentUser.email;
-    document.getElementById('profile-role').textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
-
-    // Update avatar
-    const profileAvatar = document.getElementById('profile-avatar');
-    profileAvatar.innerHTML = `<div class="user-avatar-large">${currentUser.username.substring(0, 2).toUpperCase()}</div>`;
-
-    // Update statistics
-    if (statsData) {
-        document.getElementById('profile-roadmaps-started').textContent = statsData.roadmapsStarted || 0;
-        document.getElementById('profile-roadmaps-completed').textContent = statsData.roadmapsCompleted || 0;
-        document.getElementById('profile-tasks-completed').textContent = statsData.tasksCompleted || 0;
-        document.getElementById('profile-badges-earned').textContent = statsData.badgesEarned || 0;
-    }
-
-    // Load recent activity and active roadmaps
-    loadRecentActivity();
-    loadActiveRoadmaps();
-}
+// Removed legacy updateProfileUI (stats handled differently in provided ref code)
 
 // Load recent activity
 async function loadRecentActivity() {
@@ -620,29 +596,7 @@ function displayRoadmapProgress(roadmaps) {
 }
 
 // View roadmap details with modules and tasks
-async function viewRoadmap(roadmapId) {
-    if (!currentUser) {
-        showAlert('Please log in to view roadmap details', 'warning');
-        showPage('login-page');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/roadmaps/${roadmapId}`);
-        
-        if (response.ok) {
-            const roadmapData = await response.json();
-            currentRoadmap = roadmapData;
-            displayRoadmapDetail(roadmapData);
-            showPage('roadmap-detail-page');
-        } else {
-            showAlert('Error loading roadmap details', 'danger');
-        }
-    } catch (error) {
-        console.error('Error loading roadmap:', error);
-        showAlert('Error loading roadmap details', 'danger');
-    }
-}
+// legacy duplicated viewRoadmap removed (replaced)
 
 // Display roadmap detail
 function displayRoadmapDetail(roadmap) {
@@ -951,7 +905,7 @@ showPage = function(pageId) {
     
     // Load specific data based on page
     if (pageId === 'profile-page' && currentUser) {
-        loadUserProfile();
+        loadProfileData();
     } else if (pageId === 'progress-page' && currentUser) {
         loadProgressPage();
     }
