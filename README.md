@@ -124,9 +124,7 @@ LearnPath is a lightweight full‑stack learning platform for publishing and tra
 | Automated tests | ⏳ Planned |
 | CI workflow (GitHub Actions) | ⏳ Planned |
 | True asset generation (PDF/PNG) | ⏳ Planned |
-| Password reset / email verification | ⏳ Planned |
-| Role expansion (multi-admin / instructors) | ⏳ Planned |
-| Rate limiting / audit logging | ⏳ Planned |
+| Password reset  | ⏳ Planned |
 | Frontend bundling / modularization | ⏳ Planned |
 
 ---
