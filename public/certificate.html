@@ -97,6 +97,14 @@
             margin: 30px 0;
         }
 
+        .course-details {
+            text-align: center;
+            font-size: 14px;
+            color: #4a5568;
+            margin: 20px 0;
+            line-height: 1.8;
+        }
+
         .footer {
             display: flex;
             justify-content: space-between;
@@ -135,17 +143,26 @@
 
             <div class="content">
                 <p style="text-align: center; font-size: 16px; color: #4a5568; letter-spacing: 1px;">PRESENTED TO</p>
-                <h2 class="recipient-name">Subhash Kumar</h2>
+                <h2 class="recipient-name" id="cert-recipient-name">{{STUDENT_NAME}}</h2>
                 <p class="congratulations">
-                    Congratulations on successfully completing the course.<br>
+                    Congratulations on successfully completing the course <strong id="cert-course-name">{{COURSE_NAME}}</strong>.<br>
                     Your dedication and hard work are commendable.
+                </p>
+                <p class="course-details">
+                    <strong>Course:</strong> <span id="cert-course-title">{{COURSE_TITLE}}</span><br>
+                    <strong>Completion Date:</strong> <span id="cert-completion-date">{{COMPLETION_DATE}}</span><br>
+                    <strong>Certificate ID:</strong> <span id="cert-certificate-id">{{CERTIFICATE_ID}}</span>
                 </p>
             </div>
 
             <div class="footer">
                 <div class="signature-section">
-                    <div class="signature-line" style="font-family: 'Monte Carlo', cursive;">Subhash Kumar</div>
-                    <div style="font-size: 14px; color: #4a5568; font-weight: bold;">SIGNATURE</div>
+                    <div class="signature-line" id="cert-instructor-signature">{{INSTRUCTOR_NAME}}</div>
+                    <div style="font-size: 14px; color: #4a5568; font-weight: bold;">INSTRUCTOR SIGNATURE</div>
+                </div>
+                <div class="signature-section">
+                    <div class="signature-line">LearnPath</div>
+                    <div style="font-size: 14px; color: #4a5568; font-weight: bold;">PLATFORM</div>
                 </div>
             </div>
         </div>

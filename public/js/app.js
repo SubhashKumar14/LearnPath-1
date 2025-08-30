@@ -1,3 +1,105 @@
+// Enhanced API client with better error handling (added per key changes)
+class ApiClient {
+    constructor() {
+        this.baseURL = '/api';
+        this.timeout = 10000;
+    }
+
+    async request(endpoint, options = {}) {
+        const url = `${this.baseURL}${endpoint}`;
+        const token = localStorage.getItem('authToken');
+
+        const defaultOptions = {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            timeout: this.timeout
+        };
+
+        const requestOptions = {
+            ...defaultOptions,
+            ...options,
+            headers: { ...defaultOptions.headers, ...(options.headers || {}) }
+        };
+
+        try {
+            const response = await fetch(url, requestOptions);
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Network error' }));
+                throw new Error(errorData.error || `HTTP ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('API Error:', error);
+            throw error;
+        }
+    }
+
+    get(endpoint) { return this.request(endpoint); }
+    post(endpoint, data) { return this.request(endpoint, { method: 'POST', body: JSON.stringify(data) }); }
+    put(endpoint, data) { return this.request(endpoint, { method: 'PUT', body: JSON.stringify(data) }); }
+    delete(endpoint) { return this.request(endpoint, { method: 'DELETE' }); }
+}
+
+const api = new ApiClient();
+
+// Enhanced Admin Manager with basic dashboard loading (scaffold)
+class AdminManager {
+    constructor() {
+        this.currentEditingRoadmap = null;
+        this.stats = null;
+        this.roadmaps = [];
+    }
+
+    async loadDashboard() {
+        try {
+            const [stats, roadmaps] = await Promise.all([
+                api.get('/admin/stats'),
+                api.get('/roadmaps')
+            ]);
+            this.stats = stats;
+            this.roadmaps = roadmaps;
+            this.displayStats(stats);
+            this.displayAdminRoadmaps(roadmaps);
+        } catch (error) {
+            console.error('Admin dashboard load error:', error);
+            showNotification('Failed to load admin dashboard', 'danger');
+        }
+    }
+
+    displayStats(stats) {
+        const statElements = {
+            'stat-users': stats.total_users || 0,
+            'stat-roadmaps': stats.total_roadmaps || 0,
+            'stat-courses': stats.total_courses || 0,
+            'stat-tasks': stats.total_tasks || 0,
+            'stat-certificates': stats.certificates_issued || 0,
+            'stat-badges': stats.badges_issued || 0
+        };
+        Object.entries(statElements).forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        });
+    }
+
+    // Placeholder; integrate with existing admin rendering if desired
+    displayAdminRoadmaps(roadmaps) {
+        // Re-use existing adminReloadRoadmaps logic elsewhere
+        // This method can be expanded to render roadmaps in an admin-specific panel.
+    }
+}
+
+const adminManager = new AdminManager();
+
+// Provide showNotification alias if only showAlert exists
+if (typeof window.showNotification === 'undefined') {
+    window.showNotification = function(msg, type) {
+        if (typeof showAlert === 'function') return showAlert(msg, type);
+        console.log(`[${type}] ${msg}`);
+    };
+}
+
 // Global variables
 let currentUser = null;
 let currentRoadmap = null;
@@ -117,31 +219,19 @@ async function handleLogin(e) {
     submitBtn.disabled = true;
 
     try {
-        const response = await fetch(`${API_BASE}/login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email, password })
-        });
+        const data = await api.post('/login', { email, password });
 
-        const data = await response.json();
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('userData', JSON.stringify(data.user));
+        currentUser = data.user;
 
-        if (response.ok) {
-            localStorage.setItem('authToken', data.token);
-            localStorage.setItem('userData', JSON.stringify(data.user));
-            currentUser = data.user;
-
-            showAlert('Login successful! Welcome back!', 'success');
-            updateUIForAuthenticatedUser();
-            showPage('home-page');
-            document.getElementById('login-form').reset();
-        } else {
-            showAlert(data.error || 'Login failed', 'danger');
-        }
+        showAlert('Login successful! Welcome back!', 'success');
+        updateUIForAuthenticatedUser();
+        showPage('home-page');
+        document.getElementById('login-form').reset();
     } catch (error) {
         console.error('Login error:', error);
-        showAlert('An error occurred during login', 'danger');
+        showAlert(error.message || 'An error occurred during login', 'danger');
     } finally {
         submitBtn.innerHTML = originalText;
         submitBtn.disabled = false;
@@ -168,26 +258,15 @@ async function handleRegister(e) {
     submitBtn.disabled = true;
 
     try {
-        const response = await fetch(`${API_BASE}/register`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ username, email, password })
-        });
+        await api.post('/register', { username, email, password });
 
-        const data = await response.json();
-
-        if (response.ok) {
-            showAlert('Account created successfully! Please log in.', 'success');
-            showPage('login-page');
-            document.getElementById('login-email').value = email;
-        } else {
-            showAlert(data.error || 'Registration failed', 'danger');
-        }
+        showAlert('Account created successfully! Please log in.', 'success');
+        showPage('login-page');
+        document.getElementById('login-email').value = email;
+        document.getElementById('register-form').reset();
     } catch (error) {
         console.error('Registration error:', error);
-        showAlert('An error occurred during registration', 'danger');
+        showAlert(error.message || 'An error occurred during registration', 'danger');
     } finally {
         submitBtn.innerHTML = originalText;
         submitBtn.disabled = false;
@@ -204,15 +283,424 @@ async function handleProfileUpdate(e){
     const btn = e.target.querySelector('button[type="submit"]');
     const orig = btn.innerHTML; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Updating...'; btn.disabled = true;
     try {
-        const res = await fetch(`${API_BASE}/profile`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({username,email,password})});
-        const data = await res.json();
-        if(res.ok){ currentUser.username = username; currentUser.email = email; localStorage.setItem('userData',JSON.stringify(currentUser)); updateUIForAuthenticatedUser(); loadProfileData(); showAlert('Profile updated successfully!','success'); document.getElementById('profile-password').value=''; } else { showAlert(data.error||'Profile update failed','danger'); }
-    }catch(err){ console.error(err); showAlert('Connection error','danger'); } finally { btn.innerHTML=orig; btn.disabled=false; }
+        const payload = { username, email };
+        if (password && password.trim()) {
+            payload.password = password;
+        }
+        const data = await api.put('/profile', payload);
+        
+        currentUser.username = username; 
+        currentUser.email = email; 
+        localStorage.setItem('userData', JSON.stringify(currentUser)); 
+        updateUIForAuthenticatedUser(); 
+        loadProfileData(); 
+        showAlert(data.message || 'Profile updated successfully!', 'success'); 
+        document.getElementById('profile-password').value=''; 
+    } catch(err){ 
+        console.error('Profile update error:', err); 
+        showAlert(err.message || 'Profile update failed', 'danger'); 
+    } finally { 
+        btn.innerHTML=orig; 
+        btn.disabled=false; 
+    }
 }
 
 // Load profile data
-async function loadProfileData(){
-    if(!currentUser) return; try { const res = await fetch(`${API_BASE}/profile`,{headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ const profile = await res.json(); document.getElementById('profile-username').value = profile.username; document.getElementById('profile-email').value = profile.email; document.getElementById('profile-name').textContent = profile.username; document.getElementById('profile-avatar').textContent = getUserInitials(profile.username); if(profile.stats){ const stats = profile.stats; const statRow = document.querySelector('#profile-page .row:last-child'); if(statRow){ statRow.innerHTML = '';} } } } catch(e){ console.error('Profile load error',e);} }
+// Enhanced profile loading function with role-based content
+// Add a flag to prevent multiple simultaneous loads
+let isLoadingProfile = false;
+
+async function loadProfileData() {
+    if (!currentUser || isLoadingProfile) return;
+    
+    isLoadingProfile = true;
+    try {
+        const response = await api.get('/profile');
+        const profile = response;
+        
+        // Update basic profile information
+        updateProfileBasics(profile);
+        
+        // Load role-specific content
+        if (profile.role === 'admin') {
+            await loadAdminProfile(profile);
+        } else {
+            await loadUserProfile(profile);
+        }
+        
+    } catch (error) {
+        console.error('Profile load error:', error);
+        showNotification('Failed to load profile data', 'danger');
+    } finally {
+        isLoadingProfile = false;
+    }
+}
+
+// Update basic profile information shared by all roles
+function updateProfileBasics(profile) {
+    const elements = {
+        'profile-name': profile.username || 'Unknown User',
+        'profile-email': profile.email || 'No email',
+        'profile-role': profile.role === 'admin' ? 'Administrator' : 'User',
+        'profile-edit-username': profile.username || '',
+        'profile-edit-email': profile.email || ''
+    };
+    
+    Object.entries(elements).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) {
+            if (element.tagName === 'INPUT') {
+                element.value = value;
+            } else {
+                element.textContent = value;
+            }
+        }
+    });
+    
+    // Update profile avatar with initials
+    const avatarElement = document.getElementById('profile-avatar');
+    if (avatarElement && profile.username) {
+        const initials = getUserInitials(profile.username);
+        avatarElement.innerHTML = `<div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 80px; height: 80px; font-size: 24px;">${initials}</div>`;
+    }
+    
+    // Update membership info
+    const memberSince = document.getElementById('profile-member-since');
+    const lastLogin = document.getElementById('profile-last-login');
+    
+    if (memberSince && profile.created_at) {
+        memberSince.textContent = new Date(profile.created_at).toLocaleDateString();
+    }
+    
+    if (lastLogin && profile.last_login) {
+        lastLogin.textContent = new Date(profile.last_login).toLocaleDateString();
+    }
+    
+    // Update role badge styling
+    const roleBadge = document.getElementById('profile-role');
+    if (roleBadge) {
+        roleBadge.className = `badge ${profile.role === 'admin' ? 'bg-danger' : 'bg-primary'} me-2`;
+    }
+}
+
+// Load user-specific profile content
+async function loadUserProfile(profile) {
+    // Show user content, hide admin content
+    const userContent = document.getElementById('user-profile-content');
+    const adminContent = document.getElementById('admin-profile-content');
+    
+    if (userContent) userContent.style.display = 'block';
+    if (adminContent) adminContent.style.display = 'none';
+    
+    try {
+        // Load user statistics
+        await loadUserStats();
+        
+        // Load learning roadmaps
+        await loadUserRoadmaps();
+        
+        // Load achievements and badges
+        await loadUserAchievements();
+        
+        // Load certificates
+        await loadUserCertificates();
+        
+        // Load recent activity
+        await loadUserActivity();
+        
+    } catch (error) {
+        console.error('Error loading user profile data:', error);
+    }
+}
+
+// Load admin-specific profile content
+async function loadAdminProfile(profile) {
+    // Show admin content, hide user content
+    const userContent = document.getElementById('user-profile-content');
+    const adminContent = document.getElementById('admin-profile-content');
+    
+    if (userContent) userContent.style.display = 'none';
+    if (adminContent) adminContent.style.display = 'block';
+    
+    try {
+        // Load admin statistics
+        await loadAdminStats();
+        
+        // Load admin activity
+        await loadAdminActivity();
+        
+    } catch (error) {
+        console.error('Error loading admin profile data:', error);
+    }
+}
+
+// Load user statistics
+async function loadUserStats() {
+    try {
+        const stats = await api.get('/user/stats');
+        
+        const statElements = {
+            'profile-roadmaps-started': stats.roadmaps_started || 0,
+            'profile-roadmaps-completed': stats.roadmaps_completed || 0,
+            'profile-tasks-completed': stats.tasks_completed || 0,
+            'profile-badges-earned': stats.badges_earned || 0
+        };
+        
+        Object.entries(statElements).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value;
+        });
+        
+        // Update progress bars
+        const overallProgress = stats.overall_progress || 0;
+        const weekProgress = stats.week_progress || 0;
+        
+        updateProgressBar('overall-progress-bar', 'overall-progress-percent', overallProgress);
+        updateProgressBar('week-progress-bar', 'week-progress-percent', weekProgress);
+        
+    } catch (error) {
+        console.error('Error loading user stats:', error);
+    }
+}
+
+// Load user learning roadmaps
+async function loadUserRoadmaps() {
+    try {
+        const roadmaps = await api.get('/user/roadmaps');
+        const container = document.getElementById('learning-roadmaps');
+        
+        if (!container) return;
+        
+        if (!roadmaps || roadmaps.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-road fa-2x mb-3"></i>
+                    <p>No learning roadmaps yet</p>
+                    <a href="#" onclick="showPage('roadmaps-page')" class="btn btn-primary btn-sm">Browse Roadmaps</a>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = roadmaps.map(roadmap => `
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">${roadmap.title}</h6>
+                    <span class="badge ${roadmap.progress >= 100 ? 'bg-success' : 'bg-primary'}">${roadmap.progress}%</span>
+                </div>
+                <div class="progress mb-2" style="height: 6px;">
+                    <div class="progress-bar" style="width: ${roadmap.progress}%"></div>
+                </div>
+                <small class="text-muted">${roadmap.modules_completed}/${roadmap.total_modules} modules completed</small>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading user roadmaps:', error);
+        document.getElementById('learning-roadmaps').innerHTML = '<p class="text-danger">Failed to load roadmaps</p>';
+    }
+}
+
+// Load user achievements and badges
+async function loadUserAchievements() {
+    try {
+        const achievements = await api.get('/user/achievements');
+        const container = document.getElementById('achievements-section');
+        
+        if (!container) return;
+        
+        if (!achievements || achievements.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-medal fa-2x mb-3"></i>
+                    <p>No achievements yet</p>
+                    <small>Complete roadmaps to earn badges!</small>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="row">
+                ${achievements.map(achievement => `
+                    <div class="col-6 col-md-4 text-center mb-3">
+                        <div class="achievement-badge">
+                            <i class="fas ${achievement.icon || 'fa-trophy'} fa-2x text-warning mb-2"></i>
+                            <div class="small fw-bold">${achievement.name}</div>
+                            <div class="small text-muted">${achievement.description}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error loading achievements:', error);
+        document.getElementById('achievements-section').innerHTML = '<p class="text-danger">Failed to load achievements</p>';
+    }
+}
+
+// Load user certificates
+async function loadUserCertificates() {
+    try {
+        const certificates = await api.get('/user/certificates');
+        const container = document.getElementById('certificates-section');
+        
+        if (!container) return;
+        
+        if (!certificates || certificates.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-certificate fa-2x mb-3"></i>
+                    <p>No certificates yet</p>
+                    <small>Complete roadmaps to earn certificates!</small>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = certificates.map(cert => `
+            <div class="d-flex justify-content-between align-items-center mb-3 p-2 border rounded">
+                <div>
+                    <div class="fw-bold">${cert.roadmap_title}</div>
+                    <small class="text-muted">Completed: ${new Date(cert.completed_at).toLocaleDateString()}</small>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="downloadCertificate(${cert.id})">
+                        <i class="fas fa-download me-1"></i>Download
+                    </button>
+                </div>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading certificates:', error);
+        document.getElementById('certificates-section').innerHTML = '<p class="text-danger">Failed to load certificates</p>';
+    }
+}
+
+// Load user recent activity
+async function loadUserActivity() {
+    try {
+        const activities = await api.get('/user/activity');
+        const container = document.getElementById('recent-activity');
+        
+        if (!container) return;
+        
+        if (!activities || activities.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-clock fa-2x mb-3"></i>
+                    <p>No recent activity</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = activities.map(activity => `
+            <div class="d-flex mb-3">
+                <div class="flex-shrink-0">
+                    <i class="fas ${activity.icon || 'fa-check-circle'} text-success me-3"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="small fw-bold">${activity.title}</div>
+                    <div class="small text-muted">${activity.description}</div>
+                    <div class="small text-muted">${new Date(activity.created_at).toLocaleDateString()}</div>
+                </div>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading user activity:', error);
+        document.getElementById('recent-activity').innerHTML = '<p class="text-danger">Failed to load activity</p>';
+    }
+}
+
+// Load admin statistics
+async function loadAdminStats() {
+    try {
+        // Throttle rapid repeat calls
+        const now = Date.now();
+        if (window.__lastAdminStatsFetch && now - window.__lastAdminStatsFetch < 5000) {
+            // console.debug('Skipping admin stats fetch (throttled)');
+            return;
+        }
+        window.__lastAdminStatsFetch = now;
+
+        const stats = await api.get('/admin/stats');
+        
+        const statElements = {
+            'admin-total-users': stats.total_users || 0,
+            'admin-active-users': stats.active_users || 0,
+            'admin-total-roadmaps': stats.total_roadmaps || 0,
+            'admin-total-modules': stats.total_modules || 0,
+            'admin-total-tasks': stats.total_tasks || 0,
+            'admin-certificates-issued': stats.certificates_issued || 0
+        };
+        
+        Object.entries(statElements).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value;
+        });
+        
+    } catch (error) {
+        console.error('Error loading admin stats:', error);
+    }
+}
+
+// Load admin activity log
+async function loadAdminActivity() {
+    try {
+        // Throttle repeat calls
+        const now = Date.now();
+        if (window.__lastAdminActivityFetch && now - window.__lastAdminActivityFetch < 5000) {
+            // console.debug('Skipping admin activity fetch (throttled)');
+            return;
+        }
+        window.__lastAdminActivityFetch = now;
+
+        const activities = await api.get('/admin/activity');
+        const container = document.getElementById('admin-activity');
+        
+        if (!container) return;
+        
+        if (!activities || activities.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-list-alt fa-2x mb-3"></i>
+                    <p>No recent admin activity</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = activities.map(activity => `
+            <div class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded">
+                <div>
+                    <div class="fw-bold">${activity.action}</div>
+                    <div class="text-muted small">${activity.description}</div>
+                    <div class="text-muted small">by ${activity.admin_name}</div>
+                </div>
+                <div class="text-muted small">
+                    ${new Date(activity.created_at).toLocaleDateString()}
+                </div>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading admin activity:', error);
+        document.getElementById('admin-activity').innerHTML = '<p class="text-danger">Failed to load activity</p>';
+    }
+}
+
+// Helper function to update progress bars
+function updateProgressBar(barId, percentId, value) {
+    const bar = document.getElementById(barId);
+    const percent = document.getElementById(percentId);
+    
+    if (bar) bar.style.width = `${value}%`;
+    if (percent) percent.textContent = `${value}%`;
+}
 
 // Load roadmaps from API
 async function loadRoadmaps() {
@@ -354,7 +842,7 @@ let adminEditingRoadmapId = null;
 function adminShowCreateRoadmap(){ if(!adminCheck()) return; adminEditingRoadmapId=null; document.getElementById('admin-editor-title').textContent='Create Roadmap'; document.getElementById('admin-roadmap-form').reset(); document.getElementById('admin-editor').style.display='block'; document.getElementById('admin-modules').innerHTML=''; }
 function adminCloseEditor(){ document.getElementById('admin-editor').style.display='none'; }
 function adminCheck(){ if(!currentUser||currentUser.role!=='admin'){ showAlert('Admin only','danger'); return false;} return true; }
-async function adminReloadRoadmaps(){ if(!adminCheck()) return; const res = await fetch(`${API_BASE}/roadmaps`); const data = await res.json(); const container=document.getElementById('admin-roadmaps'); container.innerHTML=''; data.forEach(r=>{ container.innerHTML += `<div class='col-md-4'><div class="card h-100"><div class="card-body"><h6 class='fw-bold mb-1'>${r.title}</h6><small class='text-muted d-block mb-2'>${r.difficulty||'Beginner'} • ${r.task_count||0} tasks</small><div class='d-flex gap-2'><button class='btn btn-sm btn-outline-primary' onclick='adminEditRoadmap(${r.id})'><i class="fas fa-edit"></i></button><button class='btn btn-sm btn-outline-danger' onclick='adminDeleteRoadmap(${r.id})'><i class="fas fa-trash"></i></button></div></div></div></div>`; }); }
+async function adminReloadRoadmaps(){ if(!adminCheck()) return; const res = await fetch(`${API_BASE}/roadmaps`); const data = await res.json(); const container=document.getElementById('admin-roadmaps-list'); if(!container) { console.error('admin-roadmaps-list element not found'); return; } container.innerHTML=''; data.forEach(r=>{ container.innerHTML += `<div class='col-md-4'><div class="card h-100"><div class="card-body"><h6 class='fw-bold mb-1'>${r.title}</h6><small class='text-muted d-block mb-2'>${r.difficulty||'Beginner'} • ${r.task_count||0} tasks</small><div class='d-flex gap-2'><button class='btn btn-sm btn-outline-primary' onclick='adminEditRoadmap(${r.id})'><i class="fas fa-edit"></i></button><button class='btn btn-sm btn-outline-danger' onclick='adminDeleteRoadmap(${r.id})'><i class="fas fa-trash"></i></button></div></div></div></div>`; }); }
 async function adminEditRoadmap(id){ if(!adminCheck()) return; const res = await fetch(`${API_BASE}/roadmaps/${id}`); if(!res.ok) return showAlert('Error loading roadmap','danger'); const rm = await res.json(); adminEditingRoadmapId=id; document.getElementById('admin-roadmap-title').value=rm.title; document.getElementById('admin-roadmap-description').value=rm.description||''; document.getElementById('admin-roadmap-difficulty').value=rm.difficulty||'Beginner'; document.getElementById('admin-roadmap-duration').value=rm.duration||30; document.getElementById('admin-editor-title').textContent='Edit Roadmap'; document.getElementById('admin-editor').style.display='block'; adminRenderModules(rm.modules||[]); }
 async function adminDeleteRoadmap(id){ if(!adminCheck()) return; if(!confirm('Delete this roadmap?')) return; const res = await fetch(`${API_BASE}/roadmaps/${id}`,{method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ showAlert('Roadmap deleted','success'); adminReloadRoadmaps(); } else { showAlert('Delete failed','danger'); } }
 document.addEventListener('submit', e=>{ if(e.target && e.target.id==='admin-roadmap-form'){ e.preventDefault(); adminSaveRoadmap(); }});
@@ -369,40 +857,9 @@ async function adminAddTask(moduleId){ const title=prompt('Task title?'); if(!ti
 async function adminPromptEditTask(id){ const el=document.querySelector(`[data-task-id='${id}']`); if(!el) return; const currentTitle=el.querySelector('.fw-semibold').textContent; const newTitle=prompt('Task title', currentTitle); if(!newTitle) return; const description=prompt('Task description',''); const resource_url=prompt('Resource URL',''); const res=await fetch(`${API_BASE}/tasks/${id}`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({title:newTitle,description,resource_url})}); if(res.ok){ showAlert('Task updated','success'); adminEditRoadmap(adminEditingRoadmapId);} else showAlert('Update failed','danger'); }
 async function adminDeleteTask(id){ if(!confirm('Delete task?')) return; const res=await fetch(`${API_BASE}/tasks/${id}`,{method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ showAlert('Task deleted','success'); adminEditRoadmap(adminEditingRoadmapId);} else showAlert('Delete failed','danger'); }
 // Initial admin load when page shown
-const originalShowPageAdmin = showPage; showPage = function(pid){ originalShowPageAdmin(pid); if(pid==='admin-page' && currentUser && currentUser.role==='admin'){ adminReloadRoadmaps(); } };
+// (Removed legacy incremental showPage override; unified later)
 
-// Show page
-function showPage(pageId) {
-    // Gate pages for anonymous users before any DOM changes
-    if (!currentUser) {
-        const protectedPages = ['progress-page','profile-page','admin-page'];
-        if (protectedPages.includes(pageId)) {
-            pageId = 'home-page';
-        }
-    } else if (currentUser && currentUser.role !== 'admin' && pageId === 'admin-page') {
-        // Non-admins can't view admin page
-        pageId = 'home-page';
-    }
-    document.querySelectorAll('.page').forEach(page => {
-        page.classList.remove('active');
-    });
-
-    const targetPage = document.getElementById(pageId);
-    if (targetPage) {
-        targetPage.classList.add('active');
-    }
-
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.remove('active');
-    });
-
-    const navLinks = document.querySelectorAll('.nav-link');
-    navLinks.forEach(link => {
-        if (link.getAttribute('onclick') && link.getAttribute('onclick').includes(pageId)) {
-            link.classList.add('active');
-        }
-    });
-}
+// Legacy showPage placeholder - replaced by unified implementation at end
 
 // Get user initials from username
 function getUserInitials(username) {
@@ -978,27 +1435,243 @@ function editProfile() {
 }
 
 // Admin Functions
-async function loadAdminStats() {
-    if (!currentUser || currentUser.role !== 'admin') return;
-    
+// Enhanced Profile Helper Functions
+
+// Download a specific certificate
+async function downloadCertificate(certificateId) {
     try {
-        const response = await fetch(`${API_BASE}/admin/stats`, {
+        const response = await fetch(`${API_BASE}/certificates/${certificateId}/download`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
         });
         
         if (response.ok) {
-            const stats = await response.json();
-            document.getElementById('stat-users').textContent = stats.total_users;
-            document.getElementById('stat-roadmaps').textContent = stats.total_roadmaps;
-            document.getElementById('stat-modules').textContent = stats.total_modules;
-            document.getElementById('stat-tasks').textContent = stats.total_tasks;
-            document.getElementById('stat-certificates').textContent = stats.certificates_issued;
-            document.getElementById('stat-badges').textContent = stats.badges_issued;
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `certificate-${certificateId}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            showNotification('Certificate downloaded successfully!', 'success');
+        } else {
+            throw new Error('Failed to download certificate');
         }
     } catch (error) {
-        console.error('Error loading admin stats:', error);
+        console.error('Error downloading certificate:', error);
+        showNotification('Failed to download certificate', 'danger');
     }
 }
+
+// Download all certificates
+async function downloadCertificates() {
+    try {
+        const response = await fetch(`${API_BASE}/certificates/download-all`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'my-certificates.zip';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            showNotification('All certificates downloaded successfully!', 'success');
+        } else {
+            throw new Error('Failed to download certificates');
+        }
+    } catch (error) {
+        console.error('Error downloading certificates:', error);
+        showNotification('Failed to download certificates', 'danger');
+    }
+}
+
+// Admin helper functions for profile page
+function viewAllUsers() {
+    showPage('admin-page');
+    // Could add specific user management section
+}
+
+function generateReports() {
+    showNotification('Report generation feature coming soon!', 'info');
+}
+
+function manageRoadmaps() {
+    showPage('admin-page');
+    // Focus on roadmap management section
+}
+
+function manageModules() {
+    showPage('admin-page');
+    // Focus on module management section
+}
+
+function manageTasks() {
+    showPage('admin-page');
+    // Focus on task management section
+}
+
+// Enhanced profile form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const profileForm = document.getElementById('profile-form');
+    if (profileForm) {
+        profileForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('profile-edit-username').value;
+            const email = document.getElementById('profile-edit-email').value;
+            const password = document.getElementById('profile-edit-password').value;
+            
+            const updateData = { username, email };
+            if (password.trim()) {
+                updateData.password = password;
+            }
+            
+            try {
+                await api.put('/profile', updateData);
+                showNotification('Profile updated successfully!', 'success');
+                
+                // Close the edit form
+                const collapseElement = document.getElementById('edit-profile-form');
+                if (collapseElement) {
+                    const collapse = new bootstrap.Collapse(collapseElement, { toggle: false });
+                    collapse.hide();
+                }
+                
+                // Reload profile data
+                loadProfileData();
+                
+            } catch (error) {
+                console.error('Profile update error:', error);
+                showNotification(error.message || 'Failed to update profile', 'danger');
+            }
+        });
+    }
+});
+
+// Enhanced Profile Helper Functions
+
+// Download a specific certificate
+async function downloadCertificate(certificateId) {
+    try {
+        const response = await fetch(`${API_BASE}/certificates/${certificateId}/download`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `certificate-${certificateId}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            showNotification('Certificate downloaded successfully!', 'success');
+        } else {
+            throw new Error('Failed to download certificate');
+        }
+    } catch (error) {
+        console.error('Error downloading certificate:', error);
+        showNotification('Failed to download certificate', 'danger');
+    }
+}
+
+// Download all certificates
+async function downloadCertificates() {
+    try {
+        const response = await fetch(`${API_BASE}/certificates/download-all`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'my-certificates.zip';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            showNotification('All certificates downloaded successfully!', 'success');
+        } else {
+            throw new Error('Failed to download certificates');
+        }
+    } catch (error) {
+        console.error('Error downloading certificates:', error);
+        showNotification('Failed to download certificates', 'danger');
+    }
+}
+
+// Admin helper functions for profile page
+function viewAllUsers() {
+    showPage('admin-page');
+    // Could add specific user management section
+}
+
+function generateReports() {
+    showNotification('Report generation feature coming soon!', 'info');
+}
+
+function manageRoadmaps() {
+    showPage('admin-page');
+    // Focus on roadmap management section
+}
+
+function manageModules() {
+    showPage('admin-page');
+    // Focus on module management section
+}
+
+function manageTasks() {
+    showPage('admin-page');
+    // Focus on task management section
+}
+
+// Enhanced profile form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const profileForm = document.getElementById('profile-form');
+    if (profileForm) {
+        profileForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('profile-edit-username').value;
+            const email = document.getElementById('profile-edit-email').value;
+            const password = document.getElementById('profile-edit-password').value;
+            
+            const updateData = { username, email };
+            if (password.trim()) {
+                updateData.password = password;
+            }
+            
+            try {
+                await api.put('/profile', updateData);
+                showNotification('Profile updated successfully!', 'success');
+                
+                // Close the edit form
+                const collapseElement = document.getElementById('edit-profile-form');
+                if (collapseElement) {
+                    const collapse = new bootstrap.Collapse(collapseElement, { toggle: false });
+                    collapse.hide();
+                }
+                
+                // Reload profile data
+                loadProfileData();
+                
+            } catch (error) {
+                console.error('Profile update error:', error);
+                showNotification(error.message || 'Failed to update profile', 'danger');
+            }
+        });
+    }
+});
 
 async function loadAdminRoadmaps() {
     if (!currentUser || currentUser.role !== 'admin') return;
@@ -1348,16 +2021,447 @@ function formatDate(dateString) {
 
 // Update the showPage function to load data when needed
 const originalShowPage = showPage;
-showPage = function(pageId) {
-    originalShowPage(pageId);
+let __currentPageId = null;
+// Remove earlier layered overrides; final unified showPage defined at end.
+
+// ===== LEGACY COURSE FUNCTIONS REMOVED =====
+// (All course functionality now handled by updated implementations below)
+
+// ===== ROADMAP BADGE FUNCTIONALITY =====
+
+function completeRoadmap() {
+    if (!currentRoadmap) return;
     
-    // Load specific data based on page
-    if (pageId === 'profile-page' && currentUser) {
-        loadProfileData();
-    } else if (pageId === 'progress-page' && currentUser) {
-        loadProgressPage();
-    } else if (pageId === 'admin-page' && currentUser && currentUser.role === 'admin') {
-        loadAdminStats();
-        loadAdminRoadmaps();
+    // Mark roadmap as completed
+    currentRoadmap.progress = 100;
+    updateRoadmapActionButtons();
+    showNotification('Congratulations! Roadmap completed successfully.', 'success');
+}
+
+function requestRoadmapBadge() {
+    if (!currentRoadmap) return;
+    
+    // Send badge request to admin
+    api.post('/badges/request', {
+        roadmapId: currentRoadmap.id,
+        type: 'roadmap'
+    }).then(() => {
+        currentRoadmap.badge_requested = true;
+        updateRoadmapActionButtons();
+        showNotification('Badge request sent to admin for approval.', 'info');
+    }).catch(error => {
+        console.error('Error requesting badge:', error);
+        showNotification('Failed to request badge', 'danger');
+    });
+}
+
+function viewRoadmapBadge() {
+    if (!currentRoadmap) return;
+    window.open(`badge.html?roadmap=${currentRoadmap.id}`, '_blank');
+}
+
+function updateRoadmapActionButtons() {
+    const startBtn = document.getElementById('start-roadmap-btn');
+    const completeBtn = document.getElementById('complete-roadmap-btn');
+    const requestBadgeBtn = document.getElementById('request-badge-btn');
+    const viewBadgeBtn = document.getElementById('view-badge-btn');
+    
+    if (!currentRoadmap) return;
+    
+    if (currentRoadmap.progress === 0) {
+        startBtn.style.display = 'block';
+        completeBtn.style.display = 'none';
+        requestBadgeBtn.style.display = 'none';
+        viewBadgeBtn.style.display = 'none';
+    } else if (currentRoadmap.progress < 100) {
+        startBtn.style.display = 'none';
+        completeBtn.style.display = 'block';
+        requestBadgeBtn.style.display = 'none';
+        viewBadgeBtn.style.display = 'none';
+    } else if (!currentRoadmap.badge_requested) {
+        startBtn.style.display = 'none';
+        completeBtn.style.display = 'none';
+        requestBadgeBtn.style.display = 'block';
+        viewBadgeBtn.style.display = 'none';
+    } else {
+        startBtn.style.display = 'none';
+        completeBtn.style.display = 'none';
+        requestBadgeBtn.style.display = 'none';
+        viewBadgeBtn.style.display = 'block';
     }
-};
+}
+
+// ===== ADMIN CERTIFICATE/BADGE GENERATION =====
+
+// Show admin requests modal
+function showAdminRequests() {
+    loadCertificateRequests();
+    loadBadgeRequests();
+    const modal = new bootstrap.Modal(document.getElementById('adminRequestsModal'));
+    modal.show();
+}
+
+// Load certificate requests
+async function loadCertificateRequests() {
+    try {
+        const requests = await api.get('/admin/certificate-requests');
+        const container = document.getElementById('certificate-requests-list');
+        
+        if (!requests.length) {
+            container.innerHTML = '<p class="text-muted">No certificate requests pending.</p>';
+            return;
+        }
+        
+        container.innerHTML = requests.map(request => `
+            <div class="request-item mb-3 p-3 border rounded">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h6 class="mb-1">${request.student_name}</h6>
+                        <p class="text-muted mb-1">${request.course_title || request.roadmap_title}</p>
+                        <small class="text-muted">Requested: ${new Date(request.created_at).toLocaleDateString()}</small>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <button class="btn btn-sm btn-primary me-2" onclick="generateCertificateForUser(${request.id})">
+                            Generate Certificate
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="rejectRequest(${request.id}, 'certificate')">
+                            Reject
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading certificate requests:', error);
+    }
+}
+
+// Load badge requests
+async function loadBadgeRequests() {
+    try {
+        const requests = await api.get('/admin/badge-requests');
+        const container = document.getElementById('badge-requests-list');
+        
+        if (!requests.length) {
+            container.innerHTML = '<p class="text-muted">No badge requests pending.</p>';
+            return;
+        }
+        
+        container.innerHTML = requests.map(request => `
+            <div class="request-item mb-3 p-3 border rounded">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h6 class="mb-1">${request.student_name}</h6>
+                        <p class="text-muted mb-1">${request.roadmap_title}</p>
+                        <small class="text-muted">Requested: ${new Date(request.created_at).toLocaleDateString()}</small>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <button class="btn btn-sm btn-warning me-2" onclick="generateBadgeForUser(${request.id})">
+                            Generate Badge
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="rejectRequest(${request.id}, 'badge')">
+                            Reject
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading badge requests:', error);
+    }
+}
+
+// Generate certificate for user
+function generateCertificateForUser(requestId) {
+    // Load request details and show generation modal
+    api.get(`/admin/certificate-requests/${requestId}`).then(request => {
+        document.getElementById('cert-student-name').value = request.student_name;
+        document.getElementById('cert-course-title').value = request.course_title || request.roadmap_title;
+        document.getElementById('cert-completion-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('cert-instructor-name').value = '';
+        document.getElementById('cert-id').value = `CERT-${Date.now()}`;
+        
+        const modal = new bootstrap.Modal(document.getElementById('certificateGenerationModal'));
+        modal.show();
+        
+        // Store request ID for later use
+        window.currentCertificateRequest = requestId;
+    });
+}
+
+// Generate badge for user
+function generateBadgeForUser(requestId) {
+    // Load request details and show generation modal
+    api.get(`/admin/badge-requests/${requestId}`).then(request => {
+        document.getElementById('badge-student-name').value = request.student_name;
+        document.getElementById('badge-roadmap-title').value = request.roadmap_title;
+        document.getElementById('badge-completion-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('badge-id').value = `BADGE-${Date.now()}`;
+        
+        const modal = new bootstrap.Modal(document.getElementById('badgeGenerationModal'));
+        modal.show();
+        
+        // Store request ID for later use
+        window.currentBadgeRequest = requestId;
+    });
+}
+
+// Preview and generate functions
+function previewCertificate() {
+    const studentName = document.getElementById('cert-student-name').value;
+    const courseTitle = document.getElementById('cert-course-title').value;
+    const completionDate = document.getElementById('cert-completion-date').value;
+    const instructorName = document.getElementById('cert-instructor-name').value;
+    const certId = document.getElementById('cert-id').value;
+    
+    showNotification('Certificate preview updated!', 'info');
+}
+
+function previewBadge() {
+    const studentName = document.getElementById('badge-student-name').value;
+    const roadmapTitle = document.getElementById('badge-roadmap-title').value;
+    const completionDate = document.getElementById('badge-completion-date').value;
+    const badgeId = document.getElementById('badge-id').value;
+    
+    showNotification('Badge preview updated!', 'info');
+}
+
+async function generateCertificate() {
+    const certificateData = {
+        requestId: window.currentCertificateRequest,
+        studentName: document.getElementById('cert-student-name').value,
+        courseTitle: document.getElementById('cert-course-title').value,
+        completionDate: document.getElementById('cert-completion-date').value,
+        instructorName: document.getElementById('cert-instructor-name').value,
+        certificateId: document.getElementById('cert-id').value
+    };
+    
+    try {
+        await api.post('/admin/generate-certificate', certificateData);
+        showNotification('Certificate generated successfully!', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('certificateGenerationModal')).hide();
+        loadCertificateRequests();
+    } catch (error) {
+        console.error('Error generating certificate:', error);
+        showNotification('Failed to generate certificate', 'danger');
+    }
+}
+
+async function generateBadge() {
+    const badgeData = {
+        requestId: window.currentBadgeRequest,
+        studentName: document.getElementById('badge-student-name').value,
+        roadmapTitle: document.getElementById('badge-roadmap-title').value,
+        completionDate: document.getElementById('badge-completion-date').value,
+        badgeId: document.getElementById('badge-id').value,
+        badgeType: document.getElementById('badge-type').value
+    };
+    
+    try {
+        await api.post('/admin/generate-badge', badgeData);
+        showNotification('Badge generated successfully!', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('badgeGenerationModal')).hide();
+        loadBadgeRequests();
+    } catch (error) {
+        console.error('Error generating badge:', error);
+        showNotification('Failed to generate badge', 'danger');
+    }
+}
+
+async function rejectRequest(requestId, type) {
+    try {
+        await api.post(`/admin/reject-${type}-request`, { requestId });
+        showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} request rejected.`, 'info');
+        
+        if (type === 'certificate') {
+            loadCertificateRequests();
+        } else {
+            loadBadgeRequests();
+        }
+    } catch (error) {
+        console.error(`Error rejecting ${type} request:`, error);
+        showNotification(`Failed to reject ${type} request`, 'danger');
+    }
+}
+
+// Export data function for admin
+function exportData() {
+    showNotification('Data export feature coming soon!', 'info');
+}
+
+// === NEW COURSE & ADMIN REQUEST ENHANCEMENTS (appended) ===
+// If newer implementations already exist earlier, these act as overrides (loaded after earlier definitions).
+
+function authHeaders(){ const t=localStorage.getItem('authToken'); return t? { 'Authorization': `Bearer ${t}` }: {}; }
+
+// Override loadCourses to use enriched backend progress
+async function loadCourses(){
+    try { const r = await fetch('/api/courses', { headers: authHeaders() }); if(!r.ok) throw 0; const data = await r.json(); const container=document.getElementById('coursesList')||document.getElementById('courses-container'); if(!container) return; container.innerHTML=''; data.forEach(c=>{ container.innerHTML += `<div class='col-md-4 mb-4'><div class="card h-100"><div class="card-body"><h5 class='fw-bold d-flex justify-content-between'><span>${c.title}</span><span class='badge bg-secondary'>${c.difficulty||''}</span></h5><p class='text-muted small mb-2'>${c.description||''}</p><div class='progress mb-2' style='height:6px'><div class='progress-bar' style='width:${c.progress||0}%;'></div></div><small class='text-muted d-block mb-2'>${c.progress||0}% complete • ${c.lessons_count||0} lessons</small><button class='btn btn-primary w-100' onclick='openCourse(${c.id})'>${c.progress? 'Continue':'Start'} Course</button></div></div></div>`; }); } catch(e){ console.error(e);} }
+
+// Override openCourse to fetch fresh data
+async function openCourse(id){ try { const r= await fetch(`/api/courses/${id}`, { headers: authHeaders() }); if(!r.ok) throw 0; const c= await r.json(); currentCourse=c; // Reuse existing detail page if present
+    if(document.getElementById('course-detail-page')) { // old structure
+        document.getElementById('course-title').textContent=c.title;
+        document.getElementById('course-description').textContent=c.description||'';
+        document.getElementById('course-difficulty').textContent=c.difficulty||'';
+        document.getElementById('course-progress-bar').style.width=(c.progress||0)+'%';
+        document.getElementById('course-progress-text').textContent=(c.progress||0)+'% Complete';
+        renderCourseLessonList(c.lessons||[]);
+        updateCourseActionButtons(c);
+        showPage('course-detail-page');
+    }
+} catch(e){ console.error(e);} }
+
+function openLessonResource(url) {
+    if (!url) return;
+    // Decode URL if it was encoded for HTML
+    const decodedUrl = url.replace(/%27/g, "'");
+    // Open in new tab/window
+    window.open(decodedUrl, '_blank');
+}
+
+function renderCourseLessonList(lessons){ const container=document.getElementById('course-lessons'); if(!container) return; container.innerHTML = lessons.map(l=>`<div class='d-flex align-items-center border rounded p-2 mb-2 ${l.completed?'bg-light':''}'><div class='flex-grow-1'><div class='fw-semibold small mb-1'>${l.title}</div>${l.duration?`<small class='text-muted d-block mb-1'>${l.duration}</small>`:''}${l.resource_url?`<button class='btn btn-sm btn-outline-primary' onclick="openLessonResource('${l.resource_url.replace(/'/g,"%27")}')"><i class='fa fa-play'></i> Resource</button>`:''}</div><div><button class='btn btn-sm ${l.completed?'btn-success':'btn-outline-secondary'}' data-lesson-id='${l.id}' data-completed='${l.completed?1:0}' onclick='toggleLessonComplete(${l.id})'>${l.completed?'<i class="fa fa-check"></i>':'<i class="fa fa-circle"></i>'}</button></div></div>`).join('') || '<div class="text-muted">No lessons</div>'; }
+
+async function toggleLessonComplete(lessonId, forceComplete=false){ 
+    try { 
+        const btn=document.querySelector(`button[data-lesson-id='${lessonId}']`); 
+        const current = btn? btn.getAttribute('data-completed')==='1':false; 
+        const completed = forceComplete? true: !current; 
+        const r = await fetch(`/api/lessons/${lessonId}/progress`, { 
+            method:'POST', 
+            headers:{ 'Content-Type':'application/json', ...authHeaders() }, 
+            body: JSON.stringify({ completed })
+        }); 
+        
+        if(!r.ok) {
+            if(r.status === 404) {
+                showNotification('Lesson not found', 'warning');
+                return;
+            }
+            throw new Error(`HTTP ${r.status}`);
+        }
+        
+        const data= await r.json(); 
+        if(btn){ 
+            btn.className='btn btn-sm '+(completed?'btn-success':'btn-outline-secondary'); 
+            btn.innerHTML = completed? '<i class="fa fa-check"></i>':'<i class="fa fa-circle"></i>'; 
+            btn.setAttribute('data-completed', completed? '1':'0'); 
+        }
+        
+        if(typeof data.progress==='number'){ 
+            document.getElementById('course-progress-bar').style.width=data.progress+'%'; 
+            document.getElementById('course-progress-text').textContent=data.progress+'% Complete'; 
+            if(currentCourse) currentCourse.progress=data.progress; 
+            updateCourseActionButtons(currentCourse); 
+        }
+    } catch(e){ 
+        console.error('Error updating lesson progress:', e);
+        showNotification('Failed to update lesson progress', 'danger');
+    } 
+}
+
+function updateCourseActionButtons(course){ if(!course) return; const startBtn=document.getElementById('start-course-btn'); const completeBtn=document.getElementById('complete-course-btn'); const requestBtn=document.getElementById('request-certificate-btn'); const viewBtn=document.getElementById('view-certificate-btn'); const progress=course.progress||0; if(startBtn){ startBtn.style.display = progress===0? 'block':'none'; } if(completeBtn){ completeBtn.style.display = progress>0 && progress<100? 'block':'none'; } if(requestBtn){ requestBtn.style.display = progress===100 && !course.certificate_requested? 'block':'none'; requestBtn.disabled = !!course.certificate_requested; } if(viewBtn){ viewBtn.style.display = progress===100 && course.certificate_requested? 'block':'none'; } }
+
+async function startCourse(){ if(!currentCourse) return; await fetch(`/api/courses/${currentCourse.id}/start`, { method:'POST', headers: authHeaders() }); openCourse(currentCourse.id); }
+async function completeCourse(){ if(!currentCourse) return; for(const l of currentCourse.lessons||[]) if(!l.completed) await toggleLessonComplete(l.id,true); }
+async function requestCourseCertificate(){ if(!currentCourse) return; const r= await fetch('/api/certificates/request',{method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()}, body: JSON.stringify({ courseId: currentCourse.id, type:'course'})}); if(r.ok){ currentCourse.certificate_requested=true; updateCourseActionButtons(currentCourse); showNotification('Certificate request submitted','success'); } }
+
+// Admin unified requests summary auto-load when admin page shows
+async function loadAdminRequestsSummary(){ if(!currentUser||currentUser.role!=='admin') return; try { const r= await fetch('/api/admin/requests/summary',{ headers: authHeaders()}); if(!r.ok) return; const data= await r.json(); // simple inject into placeholders if they exist
+ const certWrap=document.getElementById('adminPendingCertificates'); if(certWrap) certWrap.innerHTML = data.certificates.map(c=>`<div class='border rounded p-2 mb-2 d-flex justify-content-between align-items-center'><div><strong>${c.student_name}</strong><br/><small>${c.certificate_title}</small></div><button class='btn btn-sm btn-success' onclick='approveCertificateRequest(${c.id})'><i class="fa fa-check"></i></button></div>`).join('') || '<div class="text-muted">No pending certificates</div>';
+ const badgeWrap=document.getElementById('adminPendingBadges'); if(badgeWrap) badgeWrap.innerHTML = data.badges.map(b=>`<div class='border rounded p-2 mb-2 d-flex justify-content-between align-items-center'><div><strong>${b.student_name}</strong><br/><small>${b.roadmap_title}</small></div><button class='btn btn-sm btn-success' onclick='approveBadgeRequest(${b.id})'><i class="fa fa-check"></i></button></div>`).join('') || '<div class="text-muted">No pending badges</div>';
+ } catch(e){ console.error(e);} }
+
+async function approveCertificateRequest(id){ try { const r= await fetch(`/api/admin/certificate-requests/${id}/approve`, { method:'POST', headers: authHeaders()}); if(r.ok){ showNotification('Certificate approved','success'); loadAdminRequestsSummary(); } } catch(e){ console.error(e);} }
+async function approveBadgeRequest(id){ try { const r= await fetch(`/api/admin/badge-requests/${id}/approve`, { method:'POST', headers: authHeaders()}); if(r.ok){ showNotification('Badge approved','success'); loadAdminRequestsSummary(); } } catch(e){ console.error(e);} }
+
+// (Removed intermediate showPage override previously here)
+
+// ===== ADMIN COURSE MANAGEMENT UI =====
+async function adminLoadCourses(){ if(!currentUser||currentUser.role!=='admin') return; try { const r= await fetch('/api/courses', { headers: authHeaders() }); if(!r.ok) throw 0; const data= await r.json(); const wrap=document.getElementById('admin-courses-list-main'); if(!wrap) return; 
+    if(data.length === 0) {
+        wrap.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-book fa-2x mb-3"></i><p>No courses available. <a href="#" onclick="adminOpenCourseEditor()">Create your first course</a></p></div>';
+        return;
+    }
+    wrap.innerHTML=''; 
+    data.forEach(c=>{
+        const courseCard = document.createElement('div');
+        courseCard.className = 'mb-3 p-3 border rounded';
+        courseCard.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <h6 class="fw-bold mb-1">${c.title}</h6>
+                    <p class="text-muted small mb-2">${(c.description||'').slice(0,150)}${(c.description||'').length > 150 ? '...' : ''}</p>
+                    <div class="d-flex align-items-center gap-3 text-muted small">
+                        <span><i class="fas fa-signal"></i> ${c.difficulty}</span>
+                        <span><i class="fas fa-clock"></i> ${c.duration} hours</span>
+                        <span><i class="fas fa-book-open"></i> ${c.lessons_count || 0} lessons</span>
+                        <span><i class="fas fa-users"></i> ${c.students_count || 0} students</span>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-primary" onclick="adminManageLessons(${c.id})">
+                        <i class="fas fa-cog"></i> Manage
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="adminEditCourse(${c.id})">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="adminDeleteCourse(${c.id})">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+        `;
+        wrap.appendChild(courseCard);
+    });
+} catch(e){ console.error(e); }
+}
+
+function adminOpenCourseEditor(){ if(!currentUser||currentUser.role!=='admin') return; document.getElementById('admin-course-id').value=''; document.getElementById('admin-course-title').value=''; document.getElementById('admin-course-description').value=''; document.getElementById('admin-course-difficulty').value='Beginner'; document.getElementById('admin-course-duration').value='2'; document.getElementById('courseEditorTitle').textContent='New Course'; new bootstrap.Modal(document.getElementById('courseEditorModal')).show(); }
+
+async function adminEditCourse(id){ try { const r= await fetch(`/api/courses/${id}`, { headers: authHeaders() }); if(!r.ok) throw 0; const c= await r.json(); document.getElementById('admin-course-id').value=c.id; document.getElementById('admin-course-title').value=c.title; document.getElementById('admin-course-description').value=c.description||''; document.getElementById('admin-course-difficulty').value=c.difficulty||'Beginner'; document.getElementById('admin-course-duration').value=c.duration||2; document.getElementById('courseEditorTitle').textContent='Edit Course'; new bootstrap.Modal(document.getElementById('courseEditorModal')).show(); } catch(e){ console.error(e); }
+}
+
+async function adminDeleteCourse(id){ if(!confirm('Delete this course?')) return; try { const r= await fetch(`/api/courses/${id}`, { method:'DELETE', headers: authHeaders() }); if(r.ok){ showNotification('Course deleted','success'); adminLoadCourses(); } } catch(e){ console.error(e); }
+}
+
+document.addEventListener('submit', e=>{ if(e.target && e.target.id==='admin-course-form'){ e.preventDefault(); adminSaveCourse(); } if(e.target && e.target.id==='admin-lesson-form'){ e.preventDefault(); adminSaveLesson(); } });
+
+async function adminSaveCourse(){ const id=document.getElementById('admin-course-id').value; const payload={ title: document.getElementById('admin-course-title').value.trim(), description: document.getElementById('admin-course-description').value.trim(), difficulty: document.getElementById('admin-course-difficulty').value, duration: parseInt(document.getElementById('admin-course-duration').value)||2 }; if(!payload.title||!payload.description) return showNotification('Title & description required','warning'); try { const r= await fetch(id? `/api/courses/${id}`:'/api/courses',{ method: id? 'PUT':'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify(payload)}); if(!r.ok) throw 0; showNotification('Course saved','success'); bootstrap.Modal.getInstance(document.getElementById('courseEditorModal')).hide(); adminLoadCourses(); } catch(e){ showNotification('Save failed','danger'); }
+}
+
+async function adminManageLessons(courseId){ try { const r= await fetch(`/api/courses/${courseId}`, { headers: authHeaders() }); if(!r.ok) throw 0; const c= await r.json(); window.__lessonCourseId=courseId; const lessonsHtml = (c.lessons||[]).map(l=>`<tr><td>${l.title}</td><td>${l.duration||''}</td><td>${l.completed?'<i class=\'fa fa-check text-success\'></i>':''}</td><td class='text-end'><div class='btn-group btn-group-sm'><button class='btn btn-outline-secondary' onclick='adminEditLesson(${l.id},${courseId})'><i class=\'fas fa-edit\'></i></button><button class='btn btn-outline-danger' onclick='adminDeleteLesson(${l.id},${courseId})'><i class=\'fas fa-trash\'></i></button></div></td></tr>`).join('') || '<tr><td colspan="4" class="text-muted">No lessons</td></tr>';
+    const modalMarkup = `<div class="modal fade" id="lessonManageModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Lessons: ${c.title}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class='d-flex justify-content-end mb-2'><button class='btn btn-sm btn-primary' onclick='adminOpenLessonEditor(${courseId})'><i class="fas fa-plus me-1"></i>Add Lesson</button></div><table class='table table-sm'><thead><tr><th>Title</th><th style='width:120px;'>Duration</th><th style='width:40px;'>Done</th><th style='width:120px;'></th></tr></thead><tbody id='admin-lessons-tbody'>${lessonsHtml}</tbody></table></div></div></div></div>`;
+    const existing=document.getElementById('lessonManageModal'); if(existing) existing.remove(); document.body.insertAdjacentHTML('beforeend', modalMarkup); const modal = new bootstrap.Modal(document.getElementById('lessonManageModal')); modal.show(); document.getElementById('lessonManageModal').addEventListener('hidden.bs.modal',()=>{ document.getElementById('lessonManageModal').remove(); }); } catch(e){ console.error(e); }
+}
+
+function adminOpenLessonEditor(courseId){ document.getElementById('admin-lesson-course-id').value=courseId; document.getElementById('admin-lesson-id').value=''; document.getElementById('admin-lesson-title').value=''; document.getElementById('admin-lesson-duration').value=''; document.getElementById('admin-lesson-resource').value=''; document.getElementById('admin-lesson-order').value='1'; document.getElementById('lessonEditorTitle').textContent='New Lesson'; new bootstrap.Modal(document.getElementById('lessonEditorModal')).show(); }
+
+async function adminEditLesson(lessonId, courseId){ try { const r= await fetch(`/api/courses/${courseId}`, { headers: authHeaders() }); if(!r.ok) throw 0; const c= await r.json(); const lesson=(c.lessons||[]).find(l=>l.id===lessonId); if(!lesson) return; document.getElementById('admin-lesson-course-id').value=courseId; document.getElementById('admin-lesson-id').value=lesson.id; document.getElementById('admin-lesson-title').value=lesson.title; document.getElementById('admin-lesson-duration').value=lesson.duration||''; document.getElementById('admin-lesson-resource').value=lesson.resource_url||''; document.getElementById('admin-lesson-order').value=lesson.order_index||1; document.getElementById('lessonEditorTitle').textContent='Edit Lesson'; new bootstrap.Modal(document.getElementById('lessonEditorModal')).show(); } catch(e){ console.error(e); }
+}
+
+async function adminSaveLesson(){ const courseId=document.getElementById('admin-lesson-course-id').value; const lessonId=document.getElementById('admin-lesson-id').value; const payload={ title: document.getElementById('admin-lesson-title').value.trim(), duration: document.getElementById('admin-lesson-duration').value.trim(), resource_url: document.getElementById('admin-lesson-resource').value.trim(), order_index: parseInt(document.getElementById('admin-lesson-order').value)||1 }; if(!payload.title) return showNotification('Title required','warning'); try { const url = lessonId? `/api/lessons/${lessonId}`: `/api/courses/${courseId}/lessons`; const method = lessonId? 'PUT':'POST'; const r= await fetch(url,{ method, headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify(payload)}); if(!r.ok) throw 0; showNotification('Lesson saved','success'); bootstrap.Modal.getInstance(document.getElementById('lessonEditorModal')).hide(); adminManageLessons(courseId); } catch(e){ showNotification('Save failed','danger'); }
+}
+
+async function adminDeleteLesson(lessonId, courseId){ if(!confirm('Delete lesson?')) return; try { const r= await fetch(`/api/lessons/${lessonId}`, { method:'DELETE', headers: authHeaders() }); if(r.ok){ showNotification('Lesson deleted','success'); adminManageLessons(courseId); } } catch(e){ console.error(e); }
+}
+
+// Unified showPage implementation appended at end of file
+function showPage(pageId){
+    if(!currentUser){ const protectedPages=['progress-page','profile-page','admin-page','course-detail-page']; if(protectedPages.includes(pageId)) pageId='home-page'; }
+    if(currentUser && currentUser.role!=='admin' && pageId==='admin-page') pageId='home-page';
+    if(__currentPageId===pageId) return;
+    __currentPageId = pageId;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    const tp=document.getElementById(pageId); if(tp) tp.classList.add('active');
+    switch(pageId){
+        case 'profile-page': if(currentUser) loadProfileData(); break;
+        case 'progress-page': if(currentUser) loadProgressPage(); break;
+        case 'admin-page': if(currentUser && currentUser.role==='admin'){ loadAdminStats(); loadAdminRoadmaps(); adminLoadCourses(); loadAdminRequestsSummary(); } break;
+        case 'courses-page': loadCourses(); break;
+    }
+}
+
+// EOF
