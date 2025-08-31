@@ -333,7 +333,7 @@
                                     <i class="fas fa-check me-2"></i>Mark as Complete
                                 </button>
                                 <button class="btn btn-warning" id="request-certificate-btn" onclick="requestCourseCertificate()" style="display: none;">
-                                    <i class="fas fa-certificate me-2"></i>Request Certificate
+                                    <i class="fas fa-certificate me-2"></i>Generate Certificate
                                 </button>
                                 <button class="btn btn-info" id="view-certificate-btn" onclick="viewCourseCertificate()" style="display: none;">
                                     <i class="fas fa-download me-2"></i>View Certificate
@@ -863,9 +863,7 @@
                         </div>
                         <div class="card-body">
                             <div class="d-grid gap-2">
-                                <button class="btn btn-warning" onclick="showAdminRequests()">
-                                    <i class="fas fa-certificate me-2"></i>Certificate & Badge Requests
-                                </button>
+
                                 <button class="btn btn-info" onclick="showCreateRoadmapModal()">
                                     <i class="fas fa-plus me-2"></i>Create New Roadmap
                                 </button>
@@ -1306,18 +1304,7 @@
         </div>
     </div>
 
-    <!-- Admin Certificate/Badge Requests Modal -->
-    <div class="modal fade" id="adminRequestsModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Certificate & Badge Requests</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <ul class="nav nav-tabs" id="requests-tabs">
-                        <li class="nav-item">
-                            <a class="nav-link active" data-bs-toggle="tab" href="#certificate-requests">Certificate Requests</a>
+
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" data-bs-toggle="tab" href="#badge-requests">Badge Requests</a>

@@ -103,8 +103,24 @@ if (typeof window.showNotification === 'undefined') {
 // Global variables
 let currentUser = null;
 let currentRoadmap = null;
+let currentCourse = null;
 let roadmaps = [];
 let userProgress = {};
+
+// Function to reset completion flags (for testing)
+function resetCompletionFlags() {
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+        if (key.startsWith('roadmap_completed_') || key.startsWith('course_completed_')) {
+            localStorage.removeItem(key);
+        }
+    });
+    console.log('Completion flags reset - you can now trigger completion modals again');
+    showAlert('Completion flags reset! You can now retrigger completion modals.', 'info');
+}
+
+// Make reset function available globally for testing
+window.resetCompletionFlags = resetCompletionFlags;
 
 // API base URL
 const API_BASE = '/api';
@@ -155,8 +171,30 @@ async function validateToken() {
 function updateUIForAuthenticatedUser() {
     document.getElementById('user-section').style.display = 'flex';
     document.getElementById('auth-section').style.display = 'none';
-    document.getElementById('progress-nav').style.display = 'block';
-    if (currentUser.role === 'admin') document.getElementById('admin-nav').style.display = 'block';
+    
+    if (currentUser.role === 'admin' && currentUser.email === 'admin@learnpath.com') {
+        // Admin user: show only admin dashboard, hide learning navigation
+        document.getElementById('admin-nav').style.display = 'block';
+        document.getElementById('progress-nav').style.display = 'none';
+        // Hide roadmaps and courses nav items for admin
+        const navItems = document.querySelectorAll('#main-nav .nav-item');
+        navItems.forEach(item => {
+            const link = item.querySelector('.nav-link');
+            if (link && (link.textContent.includes('Roadmaps') || link.textContent.includes('Courses') || link.textContent.includes('My Progress'))) {
+                item.style.display = 'none';
+            }
+        });
+    } else {
+        // Regular user: show learning navigation, hide admin
+        document.getElementById('progress-nav').style.display = 'block';
+        document.getElementById('admin-nav').style.display = 'none';
+        // Show all nav items for regular users
+        const navItems = document.querySelectorAll('#main-nav .nav-item');
+        navItems.forEach(item => {
+            item.style.display = 'block';
+        });
+    }
+    
     document.getElementById('user-name').textContent = currentUser.username;
     document.getElementById('user-avatar').textContent = getUserInitials(currentUser.username);
 }
@@ -322,7 +360,7 @@ async function loadProfileData() {
         updateProfileBasics(profile);
         
         // Load role-specific content
-        if (profile.role === 'admin') {
+        if (profile.role === 'admin' && profile.email === 'admin@learnpath.com') {
             await loadAdminProfile(profile);
         } else {
             await loadUserProfile(profile);
@@ -341,7 +379,7 @@ function updateProfileBasics(profile) {
     const elements = {
         'profile-name': profile.username || 'Unknown User',
         'profile-email': profile.email || 'No email',
-        'profile-role': profile.role === 'admin' ? 'Administrator' : 'User',
+        'profile-role': (profile.role === 'admin' && profile.email === 'admin@learnpath.com') ? 'Administrator' : 'User',
         'profile-edit-username': profile.username || '',
         'profile-edit-email': profile.email || ''
     };
@@ -379,7 +417,7 @@ function updateProfileBasics(profile) {
     // Update role badge styling
     const roleBadge = document.getElementById('profile-role');
     if (roleBadge) {
-        roleBadge.className = `badge ${profile.role === 'admin' ? 'bg-danger' : 'bg-primary'} me-2`;
+        roleBadge.className = `badge ${(profile.role === 'admin' && profile.email === 'admin@learnpath.com') ? 'bg-danger' : 'bg-primary'} me-2`;
     }
 }
 
@@ -415,6 +453,12 @@ async function loadUserProfile(profile) {
 
 // Load admin-specific profile content
 async function loadAdminProfile(profile) {
+    // Only show admin content for admin@learnpath.com
+    if (profile.email !== 'admin@learnpath.com') {
+        await loadUserProfile(profile);
+        return;
+    }
+    
     // Show admin content, hide user content
     const userContent = document.getElementById('user-profile-content');
     const adminContent = document.getElementById('admin-profile-content');
@@ -829,7 +873,43 @@ function displayRoadmapDetails(roadmap){
 
 function displayRoadmapModules(modules){ const container = document.getElementById('roadmap-modules'); if(!container) return; if(!modules.length){ container.innerHTML='<div class="text-center text-muted py-5"><i class="fas fa-puzzle-piece fa-2x mb-3"></i><p>No modules available.</p></div>'; return; } container.innerHTML = modules.map((m,i)=>`<div class="card mb-4"><div class="card-header"><h5 class="fw-bold mb-0"><span class="module-number me-2">${i+1}</span>${m.title}</h5></div><div class="card-body"><div class="tasks-list">${(m.tasks||[]).map(t=>{ const done = currentUser && userProgress[currentUser.id] && userProgress[currentUser.id][t.id]; return `<div class='task-item d-flex align-items-start gap-2 py-2 border-bottom ${done?'task-completed':''}'><div><input type='checkbox' class='form-check-input' id='task-${t.id}' ${done?'checked':''} ${currentUser?`onchange="updateTaskProgress(${t.id}, this.checked)"`:'disabled'}></div><div class='flex-grow-1'><label for='task-${t.id}' class='form-check-label fw-medium'>${t.title}</label>${t.description?`<small class='d-block text-muted'>${t.description}</small>`:''}${t.resource_url?`<a href='${t.resource_url}' target='_blank' class='btn btn-sm btn-outline-primary mt-1'><i class='fas fa-external-link-alt me-1'></i>Resource</a>`:''}</div></div>`; }).join('') || '<p class="text-muted">No tasks.</p>'}</div></div></div>`).join(''); }
 
-async function updateTaskProgress(taskId, completed){ if(!currentUser){ showAlert('Login to track progress','warning'); return; } try { const res = await fetch(`${API_BASE}/progress/task`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({taskId, completed})}); if(res.ok){ if(!userProgress[currentUser.id]) userProgress[currentUser.id]={}; if(completed) userProgress[currentUser.id][taskId]=true; else delete userProgress[currentUser.id][taskId]; if(currentRoadmap) displayRoadmapDetails(currentRoadmap); showAlert(completed?'Task completed! 🎉':'Task marked incomplete','success'); } else { const data = await res.json(); showAlert(data.error||'Error updating progress','danger'); const cb=document.getElementById(`task-${taskId}`); if(cb) cb.checked=!completed; } } catch(e){ console.error(e); showAlert('Connection error','danger'); const cb=document.getElementById(`task-${taskId}`); if(cb) cb.checked=!completed; } }
+async function updateTaskProgress(taskId, completed){ if(!currentUser){ showAlert('Login to track progress','warning'); return; } try { 
+        const res = await fetch(`${API_BASE}/progress/task`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({taskId, completed})}); 
+        if(res.ok){ 
+            const data = await res.json();
+            
+            if(!userProgress[currentUser.id]) userProgress[currentUser.id]={}; 
+            if(completed) userProgress[currentUser.id][taskId]=true; 
+            else delete userProgress[currentUser.id][taskId]; 
+            
+            if(currentRoadmap) displayRoadmapDetails(currentRoadmap); 
+            
+            showAlert(completed?'Task completed! 🎉':'Task marked incomplete','success'); 
+            
+            // Check if roadmap just completed for the first time
+            if(data.roadmapCompleted){
+                const completionKey = `roadmap_completed_${currentRoadmap.id}_${currentUser.id}`;
+                const alreadyCompleted = localStorage.getItem(completionKey);
+                
+                if (!alreadyCompleted) {
+                    // First time completion - show modal and set flag
+                    localStorage.setItem(completionKey, 'true');
+                    showRoadmapCompletionModal();
+                }
+            }
+        } else { 
+            const data = await res.json(); 
+            showAlert(data.error||'Error updating progress','danger'); 
+            const cb=document.getElementById(`task-${taskId}`); 
+            if(cb) cb.checked=!completed; 
+        } 
+    } catch(e){ 
+        console.error(e); 
+        showAlert('Connection error','danger'); 
+        const cb=document.getElementById(`task-${taskId}`); 
+        if(cb) cb.checked=!completed; 
+    } 
+}
 
 async function startRoadmap(){ if(!currentUser) { showAlert('Login first','warning'); return;} if(!currentRoadmap){ showAlert('No roadmap selected','danger'); return;} try { const res = await fetch(`${API_BASE}/roadmaps/${currentRoadmap.id}/start`,{method:'POST',headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ showAlert('Roadmap started!','success'); const btn=document.getElementById('start-roadmap-btn'); if(btn) btn.textContent='Continue Learning'; } else { const data = await res.json(); showAlert(data.error||'Error starting roadmap','danger'); } } catch(e){ showAlert('Connection error','danger'); }}
 
@@ -841,7 +921,7 @@ let adminEditingRoadmapId = null;
 
 function adminShowCreateRoadmap(){ if(!adminCheck()) return; adminEditingRoadmapId=null; document.getElementById('admin-editor-title').textContent='Create Roadmap'; document.getElementById('admin-roadmap-form').reset(); document.getElementById('admin-editor').style.display='block'; document.getElementById('admin-modules').innerHTML=''; }
 function adminCloseEditor(){ document.getElementById('admin-editor').style.display='none'; }
-function adminCheck(){ if(!currentUser||currentUser.role!=='admin'){ showAlert('Admin only','danger'); return false;} return true; }
+function adminCheck(){ if(!currentUser||currentUser.role!=='admin'||currentUser.email!=='admin@learnpath.com'){ showAlert('Admin access restricted','danger'); return false;} return true; }
 async function adminReloadRoadmaps(){ if(!adminCheck()) return; const res = await fetch(`${API_BASE}/roadmaps`); const data = await res.json(); const container=document.getElementById('admin-roadmaps-list'); if(!container) { console.error('admin-roadmaps-list element not found'); return; } container.innerHTML=''; data.forEach(r=>{ container.innerHTML += `<div class='col-md-4'><div class="card h-100"><div class="card-body"><h6 class='fw-bold mb-1'>${r.title}</h6><small class='text-muted d-block mb-2'>${r.difficulty||'Beginner'} • ${r.task_count||0} tasks</small><div class='d-flex gap-2'><button class='btn btn-sm btn-outline-primary' onclick='adminEditRoadmap(${r.id})'><i class="fas fa-edit"></i></button><button class='btn btn-sm btn-outline-danger' onclick='adminDeleteRoadmap(${r.id})'><i class="fas fa-trash"></i></button></div></div></div></div>`; }); }
 async function adminEditRoadmap(id){ if(!adminCheck()) return; const res = await fetch(`${API_BASE}/roadmaps/${id}`); if(!res.ok) return showAlert('Error loading roadmap','danger'); const rm = await res.json(); adminEditingRoadmapId=id; document.getElementById('admin-roadmap-title').value=rm.title; document.getElementById('admin-roadmap-description').value=rm.description||''; document.getElementById('admin-roadmap-difficulty').value=rm.difficulty||'Beginner'; document.getElementById('admin-roadmap-duration').value=rm.duration||30; document.getElementById('admin-editor-title').textContent='Edit Roadmap'; document.getElementById('admin-editor').style.display='block'; adminRenderModules(rm.modules||[]); }
 async function adminDeleteRoadmap(id){ if(!adminCheck()) return; if(!confirm('Delete this roadmap?')) return; const res = await fetch(`${API_BASE}/roadmaps/${id}`,{method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ showAlert('Roadmap deleted','success'); adminReloadRoadmaps(); } else { showAlert('Delete failed','danger'); } }
@@ -1348,13 +1428,10 @@ function showRoadmapCompletionModal() {
                         <i class="fas fa-trophy text-warning fa-4x mb-3"></i>
                         <h3 class="fw-bold text-success mb-3">Congratulations!</h3>
                         <p class="lead">You've completed the roadmap: <strong>${currentRoadmap.title}</strong></p>
-                        <p class="text-muted">You can now request a certificate or badge for this achievement.</p>
+                        <p class="text-muted">You can now generate a badge for this achievement!</p>
                         <div class="d-flex gap-3 justify-content-center mt-4">
                             <button class="btn btn-primary" onclick="requestCertificate()">
-                                <i class="fas fa-certificate me-2"></i>Request Certificate
-                            </button>
-                            <button class="btn btn-outline-primary" onclick="requestBadge()">
-                                <i class="fas fa-medal me-2"></i>Request Badge
+                                <i class="fas fa-medal me-2"></i>Generate Badge
                             </button>
                         </div>
                     </div>
@@ -1373,31 +1450,148 @@ function showRoadmapCompletionModal() {
     });
 }
 
-// Request certificate
+// Show course completion modal
+function showCourseCompletionModal() {
+    const modal = `
+        <div class="modal fade" id="courseCompletionModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-body text-center p-5">
+                        <i class="fas fa-graduation-cap text-success fa-4x mb-3"></i>
+                        <h3 class="fw-bold text-success mb-3">Course Completed!</h3>
+                        <p class="lead">You've successfully completed: <strong>${currentCourse.title}</strong></p>
+                        <p class="text-muted">You can now generate a certificate for this achievement!</p>
+                        <div class="d-flex gap-3 justify-content-center mt-4">
+                            <button class="btn btn-primary" onclick="requestCourseCertificate()">
+                                <i class="fas fa-certificate me-2"></i>Generate Certificate
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="bootstrap.Modal.getInstance(document.getElementById('courseCompletionModal')).hide()">
+                                Later
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modal);
+    const modalElement = new bootstrap.Modal(document.getElementById('courseCompletionModal'));
+    modalElement.show();
+    
+    // Remove modal from DOM after it's hidden
+    document.getElementById('courseCompletionModal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+}
+
+// Generate certificate directly
 async function requestCertificate() {
     try {
-        const response = await fetch(`${API_BASE}/certificates/request`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                roadmapId: currentRoadmap.id,
-                type: 'certificate'
-            })
+        // Show modal to get user details
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Generate Certificate</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="certificate-form">
+                            <div class="mb-3">
+                                <label for="student-name" class="form-label">Student Name*</label>
+                                <input type="text" class="form-control" id="student-name" required 
+                                       placeholder="Enter full name for certificate">
+                            </div>
+                            <div class="mb-3">
+                                <label for="completion-date" class="form-label">Completion Date*</label>
+                                <input type="date" class="form-control" id="completion-date" required 
+                                       value="${new Date().toISOString().split('T')[0]}">
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="generateRoadmapCertificate()">
+                            <i class="fas fa-certificate me-2"></i>Generate Certificate
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+        
+        // Remove modal from DOM after it's hidden
+        modal.addEventListener('hidden.bs.modal', function() {
+            this.remove();
         });
-
-        if (response.ok) {
-            showAlert('Certificate request submitted! You will be notified when it\'s ready.', 'success');
-            bootstrap.Modal.getInstance(document.getElementById('completionModal')).hide();
-        } else {
-            const error = await response.json();
-            showAlert(error.error || 'Error requesting certificate', 'danger');
-        }
+        
     } catch (error) {
-        console.error('Error requesting certificate:', error);
-        showAlert('Error requesting certificate', 'danger');
+        console.error('Error showing certificate form:', error);
+        showAlert('Error showing certificate form', 'danger');
+    }
+}
+
+// Generate roadmap certificate
+async function generateRoadmapCertificate() {
+    try {
+        const studentName = document.getElementById('student-name').value;
+        const completionDate = document.getElementById('completion-date').value;
+        
+        if (!studentName || !completionDate) {
+            showAlert('Please fill in all required fields', 'warning');
+            return;
+        }
+        
+        // Generate a unique badge ID
+        const badgeId = 'BADGE-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+        
+        // Create badge data
+        const badgeData = {
+            studentName: studentName,
+            roadmapName: currentRoadmap.title,
+            completionDate: completionDate,
+            badgeId: badgeId
+        };
+        
+        // Save badge data to localStorage for the badge page to access
+        localStorage.setItem('currentBadgeData', JSON.stringify(badgeData));
+        
+        // Hide modal
+        bootstrap.Modal.getInstance(document.querySelector('.modal.show')).hide();
+        
+        // Record the badge generation in the backend
+        try {
+            await fetch(`${API_BASE}/badges/generate`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    roadmapId: currentRoadmap.id,
+                    studentName: studentName,
+                    completionDate: completionDate,
+                    badgeId: badgeId
+                })
+            });
+        } catch (error) {
+            console.error('Error recording badge in backend:', error);
+        }
+        
+        // Redirect to badge page
+        window.open(`badge.html?student=${encodeURIComponent(studentName)}&roadmap=${encodeURIComponent(currentRoadmap.title)}&date=${encodeURIComponent(completionDate)}&id=${encodeURIComponent(badgeId)}`, '_blank');
+        
+        showAlert('Badge generated successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error generating badge:', error);
+        showAlert('Error generating badge', 'danger');
     }
 }
 
@@ -2091,15 +2285,7 @@ function updateRoadmapActionButtons() {
     }
 }
 
-// ===== ADMIN CERTIFICATE/BADGE GENERATION =====
 
-// Show admin requests modal
-function showAdminRequests() {
-    loadCertificateRequests();
-    loadBadgeRequests();
-    const modal = new bootstrap.Modal(document.getElementById('adminRequestsModal'));
-    modal.show();
-}
 
 // Load certificate requests
 async function loadCertificateRequests() {
@@ -2298,7 +2484,58 @@ function authHeaders(){ const t=localStorage.getItem('authToken'); return t? { '
 
 // Override loadCourses to use enriched backend progress
 async function loadCourses(){
-    try { const r = await fetch('/api/courses', { headers: authHeaders() }); if(!r.ok) throw 0; const data = await r.json(); const container=document.getElementById('coursesList')||document.getElementById('courses-container'); if(!container) return; container.innerHTML=''; data.forEach(c=>{ container.innerHTML += `<div class='col-md-4 mb-4'><div class="card h-100"><div class="card-body"><h5 class='fw-bold d-flex justify-content-between'><span>${c.title}</span><span class='badge bg-secondary'>${c.difficulty||''}</span></h5><p class='text-muted small mb-2'>${c.description||''}</p><div class='progress mb-2' style='height:6px'><div class='progress-bar' style='width:${c.progress||0}%;'></div></div><small class='text-muted d-block mb-2'>${c.progress||0}% complete • ${c.lessons_count||0} lessons</small><button class='btn btn-primary w-100' onclick='openCourse(${c.id})'>${c.progress? 'Continue':'Start'} Course</button></div></div></div>`; }); } catch(e){ console.error(e);} }
+    try { 
+        const r = await fetch('/api/courses', { headers: authHeaders() }); 
+        if(!r.ok) throw 0; 
+        const data = await r.json(); 
+        const container=document.getElementById('coursesList')||document.getElementById('courses-container'); 
+        if(!container) return; 
+        container.innerHTML=''; 
+        
+        if(!data.length) {
+            container.innerHTML = '<div class="col-12"><p class="text-center text-muted">No courses found.</p></div>';
+            return;
+        }
+        
+        data.forEach(c => {
+            const difficulty = c.difficulty || 'Beginner';
+            const badgeClass = difficulty === 'Beginner' ? 'bg-success' : 
+                              difficulty === 'Intermediate' ? 'bg-warning' : 'bg-info';
+                              
+            const progressBarClass = c.progress >= 100 ? 'bg-success' : 'bg-primary';
+            
+            const courseCard = `
+                <div class="col-md-4 mb-4">
+                    <div class="card roadmap-card h-100 fade-in">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="card-title fw-bold">${c.title}</h5>
+                                <span class="badge ${badgeClass}">${difficulty}</span>
+                            </div>
+                            <p class="card-text text-muted">${c.description || 'No description available'}</p>
+                            <div class="progress mb-2" style="height: 8px;">
+                                <div class="progress-bar ${progressBarClass}" style="width: ${c.progress||0}%"></div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span><i class="far fa-clock me-1"></i> ${c.duration || 2} hours</span>
+                                <span><i class="fas fa-book me-1"></i> ${c.lessons_count || 0} lessons</span>
+                            </div>
+                            <small class="text-muted d-block text-center">${c.progress||0}% complete</small>
+                        </div>
+                        <div class="card-footer bg-white">
+                            <button class="btn btn-primary w-100" onclick="openCourse(${c.id})">
+                                ${c.progress > 0 ? 'Continue Course' : 'Start Course'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.innerHTML += courseCard;
+        }); 
+    } catch(e){ 
+        console.error(e);
+    } 
+}
 
 // Override openCourse to fetch fresh data
 async function openCourse(id){ try { const r= await fetch(`/api/courses/${id}`, { headers: authHeaders() }); if(!r.ok) throw 0; const c= await r.json(); currentCourse=c; // Reuse existing detail page if present
@@ -2355,6 +2592,18 @@ async function toggleLessonComplete(lessonId, forceComplete=false){
             document.getElementById('course-progress-text').textContent=data.progress+'% Complete'; 
             if(currentCourse) currentCourse.progress=data.progress; 
             updateCourseActionButtons(currentCourse); 
+            
+            // Show course completion modal if course was just completed for the first time
+            if (data.courseCompleted) {
+                const completionKey = `course_completed_${currentCourse.id}_${currentUser.id}`;
+                const alreadyCompleted = localStorage.getItem(completionKey);
+                
+                if (!alreadyCompleted) {
+                    // First time completion - show modal and set flag
+                    localStorage.setItem(completionKey, 'true');
+                    showCourseCompletionModal();
+                }
+            }
         }
     } catch(e){ 
         console.error('Error updating lesson progress:', e);
@@ -2362,11 +2611,143 @@ async function toggleLessonComplete(lessonId, forceComplete=false){
     } 
 }
 
-function updateCourseActionButtons(course){ if(!course) return; const startBtn=document.getElementById('start-course-btn'); const completeBtn=document.getElementById('complete-course-btn'); const requestBtn=document.getElementById('request-certificate-btn'); const viewBtn=document.getElementById('view-certificate-btn'); const progress=course.progress||0; if(startBtn){ startBtn.style.display = progress===0? 'block':'none'; } if(completeBtn){ completeBtn.style.display = progress>0 && progress<100? 'block':'none'; } if(requestBtn){ requestBtn.style.display = progress===100 && !course.certificate_requested? 'block':'none'; requestBtn.disabled = !!course.certificate_requested; } if(viewBtn){ viewBtn.style.display = progress===100 && course.certificate_requested? 'block':'none'; } }
+function updateCourseActionButtons(course){ 
+    if(!course) return; 
+    const startBtn=document.getElementById('start-course-btn'); 
+    const completeBtn=document.getElementById('complete-course-btn'); 
+    const requestBtn=document.getElementById('request-certificate-btn'); 
+    const viewBtn=document.getElementById('view-certificate-btn'); 
+    const progress=course.progress||0; 
+    
+    if(startBtn){ 
+        startBtn.style.display = progress===0? 'block':'none'; 
+    } 
+    if(completeBtn){ 
+        completeBtn.style.display = progress>0 && progress<100? 'block':'none'; 
+    } 
+    if(requestBtn){ 
+        // Show generate certificate button if course is completed and no certificate exists
+        requestBtn.style.display = progress===100 && !course.has_certificate? 'block':'none'; 
+        requestBtn.disabled = !!course.has_certificate; 
+    } 
+    if(viewBtn){ 
+        viewBtn.style.display = progress===100 && course.has_certificate? 'block':'none'; 
+    } 
+}
 
 async function startCourse(){ if(!currentCourse) return; await fetch(`/api/courses/${currentCourse.id}/start`, { method:'POST', headers: authHeaders() }); openCourse(currentCourse.id); }
 async function completeCourse(){ if(!currentCourse) return; for(const l of currentCourse.lessons||[]) if(!l.completed) await toggleLessonComplete(l.id,true); }
-async function requestCourseCertificate(){ if(!currentCourse) return; const r= await fetch('/api/certificates/request',{method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()}, body: JSON.stringify({ courseId: currentCourse.id, type:'course'})}); if(r.ok){ currentCourse.certificate_requested=true; updateCourseActionButtons(currentCourse); showNotification('Certificate request submitted','success'); } }
+async function requestCourseCertificate(){ 
+    if(!currentCourse) return; 
+    
+    // Show modal to get user details
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Generate Certificate</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="course-certificate-form">
+                        <div class="mb-3">
+                            <label for="course-student-name" class="form-label">Student Name*</label>
+                            <input type="text" class="form-control" id="course-student-name" required 
+                                   placeholder="Enter full name for certificate">
+                        </div>
+                        <div class="mb-3">
+                            <label for="course-completion-date" class="form-label">Completion Date*</label>
+                            <input type="date" class="form-control" id="course-completion-date" required 
+                                   value="${new Date().toISOString().split('T')[0]}">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="generateCourseCertificate()">
+                        <i class="fas fa-certificate me-2"></i>Generate Certificate
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+    
+    // Remove modal from DOM after it's hidden
+    modal.addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+}
+
+// Generate course certificate
+async function generateCourseCertificate() {
+    try {
+        const studentName = document.getElementById('course-student-name').value;
+        const completionDate = document.getElementById('course-completion-date').value;
+        
+        if (!studentName || !completionDate) {
+            showAlert('Please fill in all required fields', 'warning');
+            return;
+        }
+        
+        // Generate a unique certificate ID
+        const certificateId = 'CERT-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+        
+        // Create certificate data
+        const certificateData = {
+            studentName: studentName,
+            courseName: currentCourse.title,
+            completionDate: completionDate,
+            certificateId: certificateId,
+            instructorName: 'LearnPath Team' // You can make this configurable
+        };
+        
+        // Save certificate data to localStorage for the certificate page to access
+        localStorage.setItem('currentCertificateData', JSON.stringify(certificateData));
+        
+        // Hide modal
+        bootstrap.Modal.getInstance(document.querySelector('.modal.show')).hide();
+        
+        // Record the certificate generation in the backend
+        try {
+            await fetch('/api/certificates/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders()
+                },
+                body: JSON.stringify({
+                    courseId: currentCourse.id,
+                    studentName: studentName,
+                    completionDate: completionDate,
+                    certificateId: certificateId
+                })
+            });
+        } catch (error) {
+            console.error('Error recording certificate in backend:', error);
+        }
+        
+        // Redirect to certificate page
+        window.open(`certificate.html?student=${encodeURIComponent(studentName)}&course=${encodeURIComponent(currentCourse.title)}&date=${encodeURIComponent(completionDate)}&id=${encodeURIComponent(certificateId)}&instructor=${encodeURIComponent('LearnPath Team')}`, '_blank');
+        
+        showAlert('Certificate generated successfully!', 'success');
+        
+        // Update UI
+        currentCourse.certificate_requested = true;
+        if (typeof updateCourseActionButtons === 'function') {
+            updateCourseActionButtons(currentCourse);
+        }
+        
+    } catch (error) {
+        console.error('Error generating certificate:', error);
+        showAlert('Error generating certificate', 'danger');
+    }
+}
 
 // Admin unified requests summary auto-load when admin page shows
 async function loadAdminRequestsSummary(){ if(!currentUser||currentUser.role!=='admin') return; try { const r= await fetch('/api/admin/requests/summary',{ headers: authHeaders()}); if(!r.ok) return; const data= await r.json(); // simple inject into placeholders if they exist

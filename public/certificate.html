@@ -167,5 +167,85 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // Function to get URL parameters
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            const results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+
+        // Function to populate certificate data
+        function populateCertificate() {
+            // Get data from URL parameters
+            const studentName = getUrlParameter('student') || 'Student Name';
+            const courseName = getUrlParameter('course') || 'Course Name';
+            const completionDate = getUrlParameter('date') || new Date().toLocaleDateString();
+            const certificateId = getUrlParameter('id') || 'CERT-12345';
+            const instructorName = getUrlParameter('instructor') || 'LearnPath Team';
+
+            // Populate the certificate
+            document.getElementById('cert-recipient-name').textContent = studentName;
+            document.getElementById('cert-course-name').textContent = courseName;
+            document.getElementById('cert-course-title').textContent = courseName;
+            document.getElementById('cert-completion-date').textContent = new Date(completionDate).toLocaleDateString();
+            document.getElementById('cert-certificate-id').textContent = certificateId;
+            document.getElementById('cert-instructor-signature').textContent = instructorName;
+        }
+
+        // Function to generate PDF
+        function generatePDF() {
+            const element = document.querySelector('.certificate');
+            const opt = {
+                margin: 0.5,
+                filename: `certificate-${getUrlParameter('student')}-${getUrlParameter('course')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' }
+            };
+
+            if (typeof html2pdf !== 'undefined') {
+                html2pdf().set(opt).from(element).save();
+            } else {
+                window.print();
+            }
+        }
+
+        // Function to add download button
+        function addDownloadButton() {
+            const downloadBtn = document.createElement('button');
+            downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download PDF';
+            downloadBtn.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #2c5282;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 14px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                z-index: 1000;
+            `;
+            downloadBtn.onclick = generatePDF;
+            document.body.appendChild(downloadBtn);
+        }
+
+        // Initialize certificate when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            populateCertificate();
+            addDownloadButton();
+        });
+    </script>
+
+    <!-- Add Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Add html2pdf library for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </body>
 </html>

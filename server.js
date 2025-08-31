@@ -405,10 +405,10 @@ app.get('/api/certificates/:id/download', authenticateToken, async (req, res) =>
         const certificateId = req.params.id;
         const userId = req.user.userId;
         
-        // Verify certificate belongs to user
+        // Verify certificate belongs to user (support both ID and certificate_id)
         const [certificates] = await pool.execute(
-            'SELECT * FROM certificates WHERE id = ? AND user_id = ?', 
-            [certificateId, userId]
+            'SELECT * FROM certificates WHERE (id = ? OR certificate_id = ?) AND user_id = ?', 
+            [certificateId, certificateId, userId]
         );
         
         if (!certificates.length) {
@@ -730,7 +730,33 @@ app.post('/api/progress/task', authenticateToken, async (req, res) => {
                 [userId, taskId]
             );
         }
-        res.json({ message: 'Progress updated successfully', completed });
+        
+        // Check if roadmap is now complete
+        const [[taskRow]] = await pool.query('SELECT m.roadmap_id FROM tasks t JOIN modules m ON t.module_id = m.id WHERE t.id=?', [taskId]);
+        if(taskRow) {
+            const roadmapId = taskRow.roadmap_id;
+            
+            // Check if roadmap was previously completed
+            const [[prevStatus]] = await pool.query('SELECT completed_at FROM user_roadmaps WHERE user_id=? AND roadmap_id=?', [userId, roadmapId]);
+            const wasAlreadyCompleted = prevStatus && prevStatus.completed_at !== null;
+            
+            const [[counts]] = await pool.query(`
+                SELECT 
+                    (SELECT COUNT(*) FROM tasks t JOIN modules m ON t.module_id=m.id WHERE m.roadmap_id=?) as total,
+                    (SELECT COUNT(DISTINCT up.task_id) FROM user_progress up JOIN tasks t ON up.task_id=t.id JOIN modules m ON t.module_id=m.id WHERE m.roadmap_id=? AND up.user_id=? AND up.completed=1) as done
+            `, [roadmapId, roadmapId, userId]);
+            
+            const roadmapCompleted = counts.total > 0 && counts.done === counts.total;
+            const justCompleted = roadmapCompleted && !wasAlreadyCompleted;
+            
+            if(roadmapCompleted && !wasAlreadyCompleted){
+                await pool.execute('UPDATE user_roadmaps SET completed_at=NOW() WHERE user_id=? AND roadmap_id=?', [userId, roadmapId]);
+            }
+            
+            res.json({ message: 'Progress updated successfully', completed, roadmapCompleted: justCompleted });
+        } else {
+            res.json({ message: 'Progress updated successfully', completed });
+        }
     } catch (error) {
         console.error('Error updating progress:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -1111,10 +1137,10 @@ app.get('/api/courses/:id', async (req, res) => {
         }));
         course.progress = progress;
 
-        // Check existing certificate request
+        // Check existing certificate
         if (userId) {
-            const [reqs] = await pool.execute('SELECT status FROM certificate_requests WHERE user_id=? AND course_id=? ORDER BY id DESC LIMIT 1', [userId, courseId]);
-            if (reqs.length) course.certificate_requested = reqs[0].status === 'pending' || reqs[0].status === 'approved';
+            const [certs] = await pool.execute('SELECT id FROM certificates WHERE user_id=? AND course_id=? LIMIT 1', [userId, courseId]);
+            course.has_certificate = certs.length > 0;
         }
 
         res.json(course);
@@ -1204,33 +1230,58 @@ app.post('/api/lessons/:lessonId/progress', authenticateToken, async (req, res) 
         const userId = req.user.userId;
         const lessonId = req.params.lessonId;
         
-        // Check if lesson exists
-        const [[lessonCheck]] = await pool.query('SELECT id FROM course_lessons WHERE id=?', [lessonId]);
+        console.log(`🔍 Lesson Progress Debug: User ${userId}, Lesson ${lessonId}, Completed: ${completed}`);
+        
+        // Check if lesson exists and get course info
+        const [[lessonCheck]] = await pool.query('SELECT id, course_id FROM course_lessons WHERE id=?', [lessonId]);
         if (!lessonCheck) {
+            console.log(`❌ Lesson ${lessonId} not found`);
             return res.status(404).json({ error: 'Lesson not found' });
         }
         
-        // Upsert lesson progress
+        const courseId = lessonCheck.course_id;
+        
+        // STEP 1: Get previous progress BEFORE making any changes
+        const [[prevProgress]] = await pool.query('SELECT progress FROM user_courses WHERE user_id=? AND course_id=?', [userId, courseId]);
+        const previousProgress = prevProgress ? prevProgress.progress : 0;
+        
+        // STEP 2: Update lesson progress
         await pool.execute(`INSERT INTO lesson_progress (user_id, lesson_id, completed, completed_at)
                             VALUES (?, ?, ?, CASE WHEN ?=1 THEN NOW() ELSE NULL END)
                             ON DUPLICATE KEY UPDATE completed=VALUES(completed), completed_at=CASE WHEN VALUES(completed)=1 THEN NOW() ELSE NULL END`,
             [userId, lessonId, completed?1:0, completed?1:0]);
-        // Recompute course progress
-        const [[lessonRow]] = await pool.query('SELECT course_id FROM course_lessons WHERE id=?', [lessonId]);
-        if (lessonRow) {
-            const courseId = lessonRow.course_id;
-            const [[counts]] = await pool.query(`SELECT 
-                (SELECT COUNT(*) FROM course_lessons WHERE course_id=?) total,
-                (SELECT COUNT(*) FROM lesson_progress lp JOIN course_lessons cl ON lp.lesson_id=cl.id WHERE cl.course_id=? AND lp.user_id=? AND lp.completed=1) done
-            `, [courseId, courseId, userId]);
-            const progress = counts.total ? Math.round((counts.done / counts.total)*100) : 0;
-            await pool.execute(`INSERT INTO user_courses (user_id, course_id, progress, completed_at) VALUES (?,?,?,CASE WHEN ?=100 THEN NOW() ELSE NULL END)
-                                ON DUPLICATE KEY UPDATE progress=VALUES(progress), completed_at=CASE WHEN VALUES(progress)=100 THEN NOW() ELSE completed_at END`,
-                [userId, courseId, progress, progress]);
-            return res.json({ message:'Progress updated', progress });
-        }
-        res.json({ message:'Progress updated'});
-    } catch(e){ console.error(e); res.status(500).json({ error:'Internal server error'}); }
+            
+        console.log(`✅ Lesson progress updated for user ${userId}, lesson ${lessonId}`);
+        
+        // STEP 3: Calculate new progress after the update
+        const [[counts]] = await pool.query(`SELECT 
+            (SELECT COUNT(*) FROM course_lessons WHERE course_id=?) total,
+            (SELECT COUNT(DISTINCT lp.lesson_id) FROM lesson_progress lp 
+             JOIN course_lessons cl ON lp.lesson_id=cl.id 
+             WHERE cl.course_id=? AND lp.user_id=? AND lp.completed=1) done
+        `, [courseId, courseId, userId]);
+        
+        console.log(`📊 Course ${courseId} progress: ${counts.done}/${counts.total} lessons completed`);
+        
+        const progress = counts.total ? Math.min(100, Math.round((counts.done / counts.total)*100)) : 0;
+        
+        // STEP 4: Check if course was just completed for the first time
+        const wasCompleted = previousProgress >= 100;
+        const justCompleted = progress >= 100 && !wasCompleted;
+        
+        console.log(`🎯 Course ${courseId} progress: ${previousProgress}% -> ${progress}%, justCompleted: ${justCompleted}`);
+        
+        // STEP 5: Update course progress
+        await pool.execute(`INSERT INTO user_courses (user_id, course_id, progress, completed_at) VALUES (?,?,?,CASE WHEN ?=100 THEN NOW() ELSE NULL END)
+                            ON DUPLICATE KEY UPDATE progress=VALUES(progress), completed_at=CASE WHEN VALUES(progress)=100 AND progress<100 THEN NOW() ELSE completed_at END`,
+            [userId, courseId, progress, progress]);
+            
+        return res.json({ message:'Progress updated', progress, courseCompleted: justCompleted });
+        
+    } catch(e){ 
+        console.error('❌ Lesson progress error:', e); 
+        res.status(500).json({ error:'Internal server error'}); 
+    }
 });
 
 // Get user lesson progress for a course
@@ -1439,7 +1490,7 @@ app.post('/api/certificates/request', authenticateToken, async (req, res) => {
         // Prevent duplicate pending request
         const [existing] = await pool.execute('SELECT id FROM certificate_requests WHERE user_id=? AND (course_id=? OR roadmap_id=?) AND status="pending" LIMIT 1', [userId, courseId||0, roadmapId||0]);
         if (existing.length) return res.status(400).json({ error:'Request already pending' });
-        await pool.execute(`INSERT INTO certificate_requests (user_id, course_id, roadmap_id, student_name, certificate_title, status) VALUES (?,?,?,?,?, 'pending')`,
+        await pool.execute(`INSERT INTO certificate_requests (user_id, course_id, roadmap_id, recipient_name, course_name, status) VALUES (?,?,?,?,?, 'pending')`,
             [userId, courseId || null, roadmapId || null, users[0].username, title]);
         
         res.json({ message: 'Certificate request submitted successfully' });
@@ -1701,6 +1752,211 @@ app.post('/api/admin/reject-badge-request', authenticateToken, requireAdmin, asy
         res.json({ message: 'Badge request rejected' });
     } catch (error) {
         console.error('Error rejecting badge request:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ===== DIRECT CERTIFICATE/BADGE GENERATION ENDPOINTS =====
+
+// Generate certificate directly for course completion
+app.post('/api/certificates/generate', authenticateToken, async (req, res) => {
+    try {
+        const { courseId, studentName, completionDate } = req.body;
+        const userId = req.user.userId;
+        
+        if (!courseId || !studentName || !completionDate) {
+            return res.status(400).json({ error: 'Course ID, student name, and completion date are required' });
+        }
+        
+        // Verify course exists and user has completed it
+        const [courses] = await pool.execute('SELECT id, title FROM courses WHERE id = ?', [courseId]);
+        if (!courses.length) {
+            return res.status(404).json({ error: 'Course not found' });
+        }
+        
+        // Check if user has completed the course
+        const [userCourse] = await pool.execute(
+            'SELECT progress FROM user_courses WHERE user_id = ? AND course_id = ?', 
+            [userId, courseId]
+        );
+        
+        if (!userCourse.length || userCourse[0].progress < 100) {
+            return res.status(403).json({ error: 'Course must be completed before generating certificate' });
+        }
+        
+        // Check if certificate already exists
+        const [existingCert] = await pool.execute(
+            'SELECT id FROM certificates WHERE user_id = ? AND course_id = ?', 
+            [userId, courseId]
+        );
+        
+        if (existingCert.length) {
+            return res.status(400).json({ error: 'Certificate already exists for this course' });
+        }
+        
+        // Generate unique certificate ID
+        const certificateId = `CERT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+        
+        // Create certificate record
+        await pool.execute(`
+            INSERT INTO certificates (
+                user_id, course_id, certificate_id, student_name, 
+                title, instructor_name, completion_date, issued_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+        `, [
+            userId, 
+            courseId, 
+            certificateId, 
+            studentName, 
+            courses[0].title,
+            'LearnPath Instructor', // Default instructor name
+            completionDate
+        ]);
+        
+        res.json({ 
+            message: 'Certificate generated successfully',
+            certificateId: certificateId,
+            downloadUrl: `/api/certificates/${certificateId}/download`
+        });
+        
+    } catch (error) {
+        console.error('Error generating certificate:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Generate badge directly for roadmap completion
+app.post('/api/badges/generate', authenticateToken, async (req, res) => {
+    try {
+        const { roadmapId, studentName, completionDate } = req.body;
+        const userId = req.user.userId;
+        
+        if (!roadmapId || !studentName || !completionDate) {
+            return res.status(400).json({ error: 'Roadmap ID, student name, and completion date are required' });
+        }
+        
+        // Verify roadmap exists and user has completed it
+        const [roadmaps] = await pool.execute('SELECT id, title FROM roadmaps WHERE id = ?', [roadmapId]);
+        if (!roadmaps.length) {
+            return res.status(404).json({ error: 'Roadmap not found' });
+        }
+        
+        // Check if user has completed the roadmap
+        const [userRoadmap] = await pool.execute(
+            'SELECT completed_at FROM user_roadmaps WHERE user_id = ? AND roadmap_id = ? AND completed_at IS NOT NULL', 
+            [userId, roadmapId]
+        );
+        
+        if (!userRoadmap.length) {
+            return res.status(403).json({ error: 'Roadmap must be completed before generating badge' });
+        }
+        
+        // Check if badge already exists
+        const [existingBadge] = await pool.execute(
+            'SELECT id FROM badges WHERE user_id = ? AND roadmap_id = ?', 
+            [userId, roadmapId]
+        );
+        
+        if (existingBadge.length) {
+            return res.status(400).json({ error: 'Badge already exists for this roadmap' });
+        }
+        
+        // Generate unique badge ID
+        const badgeId = `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+        
+        // Create badge record
+        await pool.execute(`
+            INSERT INTO badges (
+                user_id, roadmap_id, badge_id, student_name, 
+                roadmap_title, completion_date, issued_at
+            ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+        `, [
+            userId, 
+            roadmapId, 
+            badgeId, 
+            studentName, 
+            roadmaps[0].title,
+            completionDate
+        ]);
+        
+        res.json({ 
+            message: 'Badge generated successfully',
+            badgeId: badgeId,
+            downloadUrl: `/api/badges/${badgeId}/download`
+        });
+        
+    } catch (error) {
+        console.error('Error generating badge:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Check if user can generate certificate for a course
+app.get('/api/courses/:id/certificate-status', authenticateToken, async (req, res) => {
+    try {
+        const courseId = req.params.id;
+        const userId = req.user.userId;
+        
+        // Check course completion
+        const [userCourse] = await pool.execute(
+            'SELECT progress FROM user_courses WHERE user_id = ? AND course_id = ?', 
+            [userId, courseId]
+        );
+        
+        // Check existing certificate
+        const [certificate] = await pool.execute(
+            'SELECT certificate_id FROM certificates WHERE user_id = ? AND course_id = ?', 
+            [userId, courseId]
+        );
+        
+        const canGenerate = userCourse.length && userCourse[0].progress >= 100 && !certificate.length;
+        const hasExisting = certificate.length > 0;
+        const progress = userCourse.length ? userCourse[0].progress : 0;
+        
+        res.json({
+            canGenerate,
+            hasExisting,
+            progress,
+            certificateId: certificate.length ? certificate[0].certificate_id : null
+        });
+        
+    } catch (error) {
+        console.error('Error checking certificate status:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Check if user can generate badge for a roadmap
+app.get('/api/roadmaps/:id/badge-status', authenticateToken, async (req, res) => {
+    try {
+        const roadmapId = req.params.id;
+        const userId = req.user.userId;
+        
+        // Check roadmap completion
+        const [userRoadmap] = await pool.execute(
+            'SELECT completed_at FROM user_roadmaps WHERE user_id = ? AND roadmap_id = ?', 
+            [userId, roadmapId]
+        );
+        
+        // Check existing badge
+        const [badge] = await pool.execute(
+            'SELECT badge_id FROM badges WHERE user_id = ? AND roadmap_id = ?', 
+            [userId, roadmapId]
+        );
+        
+        const isCompleted = userRoadmap.length && userRoadmap[0].completed_at !== null;
+        const canGenerate = isCompleted && !badge.length;
+        const hasExisting = badge.length > 0;
+        
+        res.json({
+            canGenerate,
+            hasExisting,
+            isCompleted,
+            badgeId: badge.length ? badge[0].badge_id : null
+        });
+        
+    } catch (error) {
+        console.error('Error checking badge status:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
