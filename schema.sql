@@ -136,8 +136,8 @@ CREATE TABLE user_courses (
     enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     progress INT DEFAULT 0,
     completed_at TIMESTAMP NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (course_id) REFERENCES courses(id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
     UNIQUE KEY uq_user_course (user_id, course_id)
 );
 

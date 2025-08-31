@@ -229,9 +229,11 @@ app.get('/api/user/stats', authenticateToken, async (req, res) => {
         // Get roadmap statistics
         const [roadmapStats] = await pool.execute(`
             SELECT 
-                COUNT(DISTINCT up.roadmap_id) as roadmaps_started,
-                COUNT(DISTINCT CASE WHEN up.completed_at IS NOT NULL THEN up.roadmap_id END) as roadmaps_completed
+                COUNT(DISTINCT m.roadmap_id) as roadmaps_started,
+                COUNT(DISTINCT CASE WHEN up.completed_at IS NOT NULL THEN m.roadmap_id END) as roadmaps_completed
             FROM user_progress up
+            JOIN tasks t ON up.task_id = t.id
+            JOIN modules m ON t.module_id = m.id
             WHERE up.user_id = ?
         `, [userId]);
         
@@ -1120,7 +1122,21 @@ app.put('/api/courses/:id', authenticateToken, requireAdmin, async (req, res) =>
 
 // Delete course
 app.delete('/api/courses/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try { await pool.execute('DELETE FROM courses WHERE id=?', [req.params.id]); res.json({ message: 'Course deleted'}); }
+    try { 
+        const courseId = req.params.id;
+        
+        // Delete related records first (if not using CASCADE)
+        await pool.execute('DELETE FROM lesson_progress WHERE lesson_id IN (SELECT id FROM course_lessons WHERE course_id = ?)', [courseId]);
+        await pool.execute('DELETE FROM course_notes WHERE course_id = ?', [courseId]);
+        await pool.execute('DELETE FROM user_courses WHERE course_id = ?', [courseId]);
+        await pool.execute('DELETE FROM certificates WHERE course_id = ?', [courseId]);
+        await pool.execute('DELETE FROM certificate_requests WHERE course_id = ?', [courseId]);
+        
+        // Finally delete the course (this will cascade delete course_lessons)
+        await pool.execute('DELETE FROM courses WHERE id=?', [courseId]); 
+        
+        res.json({ message: 'Course deleted successfully'}); 
+    }
     catch(e){ console.error(e); res.status(500).json({ error: 'Internal server error'}); }
 });
 
