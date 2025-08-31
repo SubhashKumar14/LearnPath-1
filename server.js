@@ -244,23 +244,48 @@ app.get('/api/user/stats', authenticateToken, async (req, res) => {
             WHERE up.user_id = ? AND up.completed_at IS NOT NULL
         `, [userId]);
         
-        // Get badge count - using the badges table instead of user_badges
+        // Get course statistics
+        const [courseStats] = await pool.execute(`
+            SELECT 
+                COUNT(*) as courses_started,
+                COUNT(CASE WHEN uc.progress = 100 THEN 1 END) as courses_completed,
+                AVG(uc.progress) as avg_course_progress
+            FROM user_courses uc
+            WHERE uc.user_id = ?
+        `, [userId]);
+        
+        // Get badge count
         const [badgeStats] = await pool.execute(`
             SELECT COUNT(*) as badges_earned
             FROM badges b
             WHERE b.user_id = ?
         `, [userId]);
         
-        // Calculate overall progress (mock calculation)
-        const overallProgress = Math.min(100, Math.round((taskStats[0].tasks_completed / 10) * 100));
-        const weekProgress = Math.floor(Math.random() * 30) + 10; // Mock weekly progress
+        // Calculate overall progress based on courses and roadmaps
+        const avgCourseProgress = courseStats[0].avg_course_progress || 0;
+        const taskCompletionRate = taskStats[0].tasks_completed || 0;
+        const overallProgress = Math.round((avgCourseProgress + Math.min(taskCompletionRate * 10, 100)) / 2);
+        
+        // Calculate weekly progress (based on recent activity)
+        const [weeklyStats] = await pool.execute(`
+            SELECT COUNT(*) as recent_completions
+            FROM (
+                SELECT completed_at FROM user_progress WHERE user_id = ? AND completed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                UNION ALL
+                SELECT completed_at FROM lesson_progress WHERE user_id = ? AND completed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            ) as recent_activity
+        `, [userId, userId]);
+        
+        const weekProgress = Math.min(100, (weeklyStats[0].recent_completions || 0) * 10);
         
         res.json({
             roadmaps_started: roadmapStats[0].roadmaps_started || 0,
             roadmaps_completed: roadmapStats[0].roadmaps_completed || 0,
+            courses_started: courseStats[0].courses_started || 0,
+            courses_completed: courseStats[0].courses_completed || 0,
             tasks_completed: taskStats[0].tasks_completed || 0,
             badges_earned: badgeStats[0].badges_earned || 0,
-            overall_progress: overallProgress,
+            overall_progress: Math.min(100, overallProgress),
             week_progress: weekProgress
         });
     } catch (error) {
