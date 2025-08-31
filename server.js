@@ -1192,6 +1192,44 @@ app.post('/api/lessons/:lessonId/progress', authenticateToken, async (req, res) 
     } catch(e){ console.error(e); res.status(500).json({ error:'Internal server error'}); }
 });
 
+// Get user lesson progress for a course
+app.get('/api/courses/:courseId/progress', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const courseId = req.params.courseId;
+        
+        // Get lesson progress for this course and user
+        const [progress] = await pool.execute(`
+            SELECT 
+                cl.id as lesson_id,
+                cl.title,
+                cl.order_index,
+                COALESCE(lp.completed, 0) as completed,
+                lp.completed_at
+            FROM course_lessons cl
+            LEFT JOIN lesson_progress lp ON cl.id = lp.lesson_id AND lp.user_id = ?
+            WHERE cl.course_id = ?
+            ORDER BY cl.order_index
+        `, [userId, courseId]);
+        
+        // Calculate overall progress
+        const totalLessons = progress.length;
+        const completedLessons = progress.filter(l => l.completed).length;
+        const progressPercent = totalLessons ? Math.round((completedLessons / totalLessons) * 100) : 0;
+        
+        res.json({
+            courseId: courseId,
+            totalLessons,
+            completedLessons,
+            progressPercent,
+            lessons: progress
+        });
+    } catch (error) {
+        console.error('Error getting course progress:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Save course notes
 app.post('/api/courses/notes', authenticateToken, async (req, res) => {
     try {
@@ -1206,6 +1244,132 @@ app.post('/api/courses/notes', authenticateToken, async (req, res) => {
         res.json({ message: 'Notes saved successfully' });
     } catch (error) {
         console.error('Error saving course notes:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ===== CERTIFICATE AND BADGE GENERATION =====
+
+// Generate certificate for completed course
+app.post('/api/courses/:courseId/certificate', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const courseId = req.params.courseId;
+        
+        // Check if user has completed the course
+        const [[courseProgress]] = await pool.execute(`
+            SELECT uc.progress, c.title as course_title, c.instructor
+            FROM user_courses uc
+            JOIN courses c ON uc.course_id = c.id
+            WHERE uc.user_id = ? AND uc.course_id = ? AND uc.progress = 100
+        `, [userId, courseId]);
+        
+        if (!courseProgress) {
+            return res.status(400).json({ error: 'Course not completed yet' });
+        }
+        
+        // Get user info
+        const [[user]] = await pool.execute('SELECT username, email FROM users WHERE id = ?', [userId]);
+        
+        // Check if certificate already exists
+        const [[existingCert]] = await pool.execute(
+            'SELECT certificate_id FROM certificates WHERE user_id = ? AND course_id = ?',
+            [userId, courseId]
+        );
+        
+        if (existingCert) {
+            return res.json({ 
+                message: 'Certificate already exists',
+                certificateId: existingCert.certificate_id 
+            });
+        }
+        
+        // Generate unique certificate ID
+        const certificateId = `CERT-${courseId}-${userId}-${Date.now()}`;
+        
+        // Insert certificate record
+        await pool.execute(`
+            INSERT INTO certificates (certificate_id, user_id, course_id, student_name, title, instructor_name, completion_date)
+            VALUES (?, ?, ?, ?, ?, ?, CURDATE())
+        `, [certificateId, userId, courseId, user.username, courseProgress.course_title, courseProgress.instructor]);
+        
+        res.json({ 
+            message: 'Certificate generated successfully',
+            certificateId: certificateId,
+            studentName: user.username,
+            courseTitle: courseProgress.course_title,
+            instructor: courseProgress.instructor,
+            completionDate: new Date().toISOString().split('T')[0]
+        });
+        
+    } catch (error) {
+        console.error('Error generating certificate:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Generate badge for completed roadmap
+app.post('/api/roadmaps/:roadmapId/badge', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const roadmapId = req.params.roadmapId;
+        
+        // Check if user has completed all tasks in the roadmap
+        const [[completion]] = await pool.execute(`
+            SELECT 
+                COUNT(t.id) as total_tasks,
+                COUNT(up.id) as completed_tasks,
+                r.title as roadmap_title
+            FROM roadmaps r
+            JOIN modules m ON r.id = m.roadmap_id
+            JOIN tasks t ON m.id = t.module_id
+            LEFT JOIN user_progress up ON t.id = up.task_id AND up.user_id = ? AND up.completed = 1
+            WHERE r.id = ?
+            GROUP BY r.id, r.title
+        `, [userId, roadmapId]);
+        
+        if (!completion || completion.total_tasks !== completion.completed_tasks) {
+            return res.status(400).json({ 
+                error: 'Roadmap not completed yet',
+                progress: completion ? `${completion.completed_tasks}/${completion.total_tasks}` : '0/0'
+            });
+        }
+        
+        // Get user info
+        const [[user]] = await pool.execute('SELECT username FROM users WHERE id = ?', [userId]);
+        
+        // Check if badge already exists
+        const [[existingBadge]] = await pool.execute(
+            'SELECT badge_id FROM badges WHERE user_id = ? AND roadmap_id = ?',
+            [userId, roadmapId]
+        );
+        
+        if (existingBadge) {
+            return res.json({ 
+                message: 'Badge already exists',
+                badgeId: existingBadge.badge_id 
+            });
+        }
+        
+        // Generate unique badge ID
+        const badgeId = `BADGE-${roadmapId}-${userId}-${Date.now()}`;
+        
+        // Insert badge record
+        await pool.execute(`
+            INSERT INTO badges (badge_id, user_id, roadmap_id, student_name, roadmap_title, completion_date)
+            VALUES (?, ?, ?, ?, ?, CURDATE())
+        `, [badgeId, userId, roadmapId, user.username, completion.roadmap_title]);
+        
+        res.json({ 
+            message: 'Badge generated successfully',
+            badgeId: badgeId,
+            studentName: user.username,
+            roadmapTitle: completion.roadmap_title,
+            completionDate: new Date().toISOString().split('T')[0]
+        });
+        
+    } catch (error) {
+        console.error('Error generating badge:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
