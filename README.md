@@ -167,7 +167,7 @@ LearnPath is a lightweight full‑stack learning platform for publishing and tra
 ---
 ## 🏗️ Architecture
 
-![LearnPath System Architecture](docs\images\learnpath system architecture diagram.svg)
+![LearnPath System Architecture](docs\images\Architecture.svg)
 
 * **Frontend**: Vanilla JS + Bootstrap 5 served statically from `public/`.
 * **Backend**: Express REST API (`server.js`).
