@@ -120,16 +120,13 @@ LearnPath addresses the challenge of unstructured online learning by providing:
 
 ### **System Architecture Overview**
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend API    │    │   Database      │
-│   (Browser)     │◄──►│   (Express.js)   │◄──►│   (MySQL)       │
-│                 │    │                  │    │                 │
-│ • HTML/CSS/JS   │    │ • REST API       │    │ • User Data     │
-│ • Bootstrap UI  │    │ • Authentication │    │ • Progress      │
-│ • AJAX Requests │    │ • Session Mgmt   │    │ • Content       │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-```
+<div align="center">
+
+![LearnPath System Architecture](docs/images/architecture-diagram.svg)
+
+*Interactive Architecture Diagram showing Frontend, Backend API, and Database layers with technology stack*
+
+</div>
 
 ### **Application Layers**
 
