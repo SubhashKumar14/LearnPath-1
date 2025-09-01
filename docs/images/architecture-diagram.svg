@@ -1,1 +1,144 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="1081px" height="521px" viewBox="-0.5 -0.5 1081 521" content="&lt;mxfile host=&quot;app.diagrams.net&quot; agent=&quot;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36&quot; version=&quot;24.7.6&quot;&gt;&lt;diagram name=&quot;Page-1&quot; id=&quot;SuaIhSGKSvLw-eRQ8BLS&quot;&gt;&lt;mxGraphModel dx=&quot;1114&quot; dy=&quot;598&quot; grid=&quot;1&quot; gridSize=&quot;10&quot; guides=&quot;1&quot; tooltips=&quot;1&quot; connect=&quot;1&quot; arrows=&quot;1&quot; fold=&quot;1&quot; page=&quot;1&quot; pageScale=&quot;1&quot; pageWidth=&quot;850&quot; pageHeight=&quot;1100&quot; math=&quot;0&quot; shadow=&quot;0&quot;&gt;&lt;root&gt;&lt;mxCell id=&quot;0&quot;/&gt;&lt;mxCell id=&quot;1&quot; parent=&quot;0&quot;/&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-1&quot; value=&quot;&quot; style=&quot;rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;40&quot; y=&quot;80&quot; width=&quot;1000&quot; height=&quot;80&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-2&quot; value=&quot;&lt;h1&gt;Frontend Layer&lt;/h1&gt;&quot; style=&quot;text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;480&quot; y=&quot;90&quot; width=&quot;120&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-3&quot; value=&quot;HTML/CSS/JS&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;60&quot; y=&quot;120&quot; width=&quot;100&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-4&quot; value=&quot;Bootstrap 5.3&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;190&quot; y=&quot;120&quot; width=&quot;100&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-5&quot; value=&quot;JWT Auth&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;320&quot; y=&quot;120&quot; width=&quot;100&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-6&quot; value=&quot;Progress UI&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;450&quot; y=&quot;120&quot; width=&quot;100&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-7&quot; value=&quot;Certificate PDF&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;580&quot; y=&quot;120&quot; width=&quot;100&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-8&quot; value=&quot;Badge System&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;710&quot; y=&quot;120&quot; width=&quot;100&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-9&quot; value=&quot;Admin Panel&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;840&quot; y=&quot;120&quot; width=&quot;100&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-10&quot; value=&quot;&quot; style=&quot;rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;40&quot; y=&quot;200&quot; width=&quot;1000&quot; height=&quot;120&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-11&quot; value=&quot;&lt;h1&gt;Backend API Layer (Node.js + Express.js)&lt;/h1&gt;&quot; style=&quot;text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;480&quot; y=&quot;210&quot; width=&quot;120&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-12&quot; value=&quot;Auth Module&lt;div&gt;• JWT Tokens&lt;/div&gt;&lt;div&gt;• bcrypt Hash&lt;/div&gt;&lt;div&gt;• Role Guards&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;80&quot; y=&quot;240&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-13&quot; value=&quot;Content API&lt;div&gt;• Roadmaps&lt;/div&gt;&lt;div&gt;• Modules&lt;/div&gt;&lt;div&gt;• Tasks&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;230&quot; y=&quot;240&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-14&quot; value=&quot;Progress API&lt;div&gt;• Real-time Track&lt;/div&gt;&lt;div&gt;• Completion %&lt;/div&gt;&lt;div&gt;• Activity Feed&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;380&quot; y=&quot;240&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-15&quot; value=&quot;Certificate API&lt;div&gt;• PDF Generation&lt;/div&gt;&lt;div&gt;• Badge Creation&lt;/div&gt;&lt;div&gt;• Validation&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;530&quot; y=&quot;240&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-16&quot; value=&quot;User API&lt;div&gt;• Profile Mgmt&lt;/div&gt;&lt;div&gt;• Enrollment&lt;/div&gt;&lt;div&gt;• Statistics&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;680&quot; y=&quot;240&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-17&quot; value=&quot;Admin API&lt;div&gt;• User Mgmt&lt;/div&gt;&lt;div&gt;• Analytics&lt;/div&gt;&lt;div&gt;• Content CRUD&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;830&quot; y=&quot;240&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-18&quot; value=&quot;&quot; style=&quot;rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;40&quot; y=&quot;360&quot; width=&quot;1000&quot; height=&quot;120&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-19&quot; value=&quot;&lt;h1&gt;Database Layer (MySQL 8.0+)&lt;/h1&gt;&quot; style=&quot;text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;480&quot; y=&quot;370&quot; width=&quot;120&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-20&quot; value=&quot;Users&lt;div&gt;• Authentication&lt;/div&gt;&lt;div&gt;• Profiles&lt;/div&gt;&lt;div&gt;• Roles&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;80&quot; y=&quot;400&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-21&quot; value=&quot;Roadmaps&lt;div&gt;• Learning Paths&lt;/div&gt;&lt;div&gt;• Modules&lt;/div&gt;&lt;div&gt;• Tasks&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;230&quot; y=&quot;400&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-22&quot; value=&quot;Progress&lt;div&gt;• User Progress&lt;/div&gt;&lt;div&gt;• Completion&lt;/div&gt;&lt;div&gt;• Timestamps&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;380&quot; y=&quot;400&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-23&quot; value=&quot;Certificates&lt;div&gt;• Issue Records&lt;/div&gt;&lt;div&gt;• Asset URLs&lt;/div&gt;&lt;div&gt;• Validation&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;530&quot; y=&quot;400&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-24&quot; value=&quot;Badges&lt;div&gt;• Badge Records&lt;/div&gt;&lt;div&gt;• Asset URLs&lt;/div&gt;&lt;div&gt;• Requirements&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;680&quot; y=&quot;400&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-25&quot; value=&quot;Analytics&lt;div&gt;• System Stats&lt;/div&gt;&lt;div&gt;• User Metrics&lt;/div&gt;&lt;div&gt;• Reports&lt;/div&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;830&quot; y=&quot;400&quot; width=&quot;120&quot; height=&quot;70&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-26&quot; value=&quot;&quot; style=&quot;endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=3;&quot; edge=&quot;1&quot; parent=&quot;1&quot; source=&quot;w8LKPDDkgqLK2WaXU8tB-1&quot; target=&quot;w8LKPDDkgqLK2WaXU8tB-10&quot;&gt;&lt;mxGeometry width=&quot;50&quot; height=&quot;50&quot; relative=&quot;1&quot; as=&quot;geometry&quot;&gt;&lt;mxPoint x=&quot;540&quot; y=&quot;240&quot; as=&quot;sourcePoint&quot;/&gt;&lt;mxPoint x=&quot;590&quot; y=&quot;190&quot; as=&quot;targetPoint&quot;/&gt;&lt;/mxGeometry&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-27&quot; value=&quot;&quot; style=&quot;endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=3;&quot; edge=&quot;1&quot; parent=&quot;1&quot; source=&quot;w8LKPDDkgqLK2WaXU8tB-10&quot; target=&quot;w8LKPDDkgqLK2WaXU8tB-18&quot;&gt;&lt;mxGeometry width=&quot;50&quot; height=&quot;50&quot; relative=&quot;1&quot; as=&quot;geometry&quot;&gt;&lt;mxPoint x=&quot;550&quot; y=&quot;170&quot; as=&quot;sourcePoint&quot;/&gt;&lt;mxPoint x=&quot;550&quot; y=&quot;210&quot; as=&quot;targetPoint&quot;/&gt;&lt;/mxGeometry&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-28&quot; value=&quot;&lt;h1&gt;Tech Stack: Node.js 16+ | Express.js 4.18.2 | MySQL 8.0+ | Bootstrap 5.3+ | JWT Auth | bcryptjs&lt;/h1&gt;&quot; style=&quot;rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;40&quot; y=&quot;500&quot; width=&quot;1000&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-29&quot; value=&quot;&lt;h1&gt;API Requests&lt;/h1&gt;&quot; style=&quot;text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;570&quot; y=&quot;165&quot; width=&quot;120&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-30&quot; value=&quot;&lt;h1&gt;Database Operations&lt;/h1&gt;&quot; style=&quot;text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;570&quot; y=&quot;325&quot; width=&quot;120&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;w8LKPDDkgqLK2WaXU8tB-31&quot; value=&quot;&lt;h1&gt;LearnPath LMS - System Architecture&lt;/h1&gt;&quot; style=&quot;text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;420&quot; y=&quot;40&quot; width=&quot;240&quot; height=&quot;30&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;/root&gt;&lt;/mxGraphModel&gt;&lt;/diagram&gt;&lt;/mxfile&gt;</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 520">
+  <defs>
+    <style>
+      .title { font: bold 20px sans-serif; fill: #2c3e50; text-anchor: middle; }
+      .layer-title { font: bold 16px sans-serif; fill: #2c3e50; text-anchor: middle; }
+      .module-title { font: bold 12px sans-serif; fill: #2c3e50; text-anchor: middle; }
+      .module-text { font: 10px sans-serif; fill: #2c3e50; text-anchor: middle; }
+      .tech-stack { font: bold 14px sans-serif; fill: #333; text-anchor: middle; }
+      .flow-label { font: bold 14px sans-serif; fill: #2c3e50; text-anchor: middle; }
+    </style>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1080" height="520" fill="#ffffff"/>
+  
+  <!-- Title -->
+  <text x="540" y="30" class="title">LearnPath LMS - System Architecture</text>
+  
+  <!-- Frontend Layer -->
+  <rect x="40" y="80" width="1000" height="80" fill="#d5e8d4" stroke="#82b366" stroke-width="2" rx="5"/>
+  <text x="540" y="105" class="layer-title">Frontend Layer</text>
+  
+  <!-- Frontend Components -->
+  <rect x="60" y="120" width="100" height="30" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1" rx="5"/>
+  <text x="110" y="140" class="module-text">HTML/CSS/JS</text>
+  
+  <rect x="190" y="120" width="100" height="30" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1" rx="5"/>
+  <text x="240" y="140" class="module-text">Bootstrap 5.3</text>
+  
+  <rect x="320" y="120" width="100" height="30" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1" rx="5"/>
+  <text x="370" y="140" class="module-text">JWT Auth</text>
+  
+  <rect x="450" y="120" width="100" height="30" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1" rx="5"/>
+  <text x="500" y="140" class="module-text">Progress UI</text>
+  
+  <rect x="580" y="120" width="100" height="30" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1" rx="5"/>
+  <text x="630" y="140" class="module-text">Certificate PDF</text>
+  
+  <rect x="710" y="120" width="100" height="30" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1" rx="5"/>
+  <text x="760" y="140" class="module-text">Badge System</text>
+  
+  <rect x="840" y="120" width="100" height="30" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1" rx="5"/>
+  <text x="890" y="140" class="module-text">Admin Panel</text>
+  
+  <!-- Backend Layer -->
+  <rect x="40" y="200" width="1000" height="120" fill="#ffe6cc" stroke="#d79b00" stroke-width="2" rx="5"/>
+  <text x="540" y="225" class="layer-title">Backend API Layer (Node.js + Express.js)</text>
+  
+  <!-- Backend Modules -->
+  <rect x="80" y="240" width="120" height="70" fill="#f8cecc" stroke="#b85450" stroke-width="1" rx="5"/>
+  <text x="140" y="260" class="module-title">Auth Module</text>
+  <text x="140" y="275" class="module-text">• JWT Tokens</text>
+  <text x="140" y="285" class="module-text">• bcrypt Hash</text>
+  <text x="140" y="295" class="module-text">• Role Guards</text>
+  
+  <rect x="230" y="240" width="120" height="70" fill="#f8cecc" stroke="#b85450" stroke-width="1" rx="5"/>
+  <text x="290" y="260" class="module-title">Content API</text>
+  <text x="290" y="275" class="module-text">• Roadmaps</text>
+  <text x="290" y="285" class="module-text">• Modules</text>
+  <text x="290" y="295" class="module-text">• Tasks</text>
+  
+  <rect x="380" y="240" width="120" height="70" fill="#f8cecc" stroke="#b85450" stroke-width="1" rx="5"/>
+  <text x="440" y="260" class="module-title">Progress API</text>
+  <text x="440" y="275" class="module-text">• Real-time Track</text>
+  <text x="440" y="285" class="module-text">• Completion %</text>
+  <text x="440" y="295" class="module-text">• Activity Feed</text>
+  
+  <rect x="530" y="240" width="120" height="70" fill="#f8cecc" stroke="#b85450" stroke-width="1" rx="5"/>
+  <text x="590" y="260" class="module-title">Certificate API</text>
+  <text x="590" y="275" class="module-text">• PDF Generation</text>
+  <text x="590" y="285" class="module-text">• Badge Creation</text>
+  <text x="590" y="295" class="module-text">• Validation</text>
+  
+  <rect x="680" y="240" width="120" height="70" fill="#f8cecc" stroke="#b85450" stroke-width="1" rx="5"/>
+  <text x="740" y="260" class="module-title">User API</text>
+  <text x="740" y="275" class="module-text">• Profile Mgmt</text>
+  <text x="740" y="285" class="module-text">• Enrollment</text>
+  <text x="740" y="295" class="module-text">• Statistics</text>
+  
+  <rect x="830" y="240" width="120" height="70" fill="#f8cecc" stroke="#b85450" stroke-width="1" rx="5"/>
+  <text x="890" y="260" class="module-title">Admin API</text>
+  <text x="890" y="275" class="module-text">• User Mgmt</text>
+  <text x="890" y="285" class="module-text">• Analytics</text>
+  <text x="890" y="295" class="module-text">• Content CRUD</text>
+  
+  <!-- Database Layer -->
+  <rect x="40" y="360" width="1000" height="120" fill="#e1d5e7" stroke="#9673a6" stroke-width="2" rx="5"/>
+  <text x="540" y="385" class="layer-title">Database Layer (MySQL 8.0+)</text>
+  
+  <!-- Database Tables -->
+  <rect x="80" y="400" width="120" height="70" fill="#fff2cc" stroke="#d6b656" stroke-width="1" rx="5"/>
+  <text x="140" y="420" class="module-title">Users</text>
+  <text x="140" y="435" class="module-text">• Authentication</text>
+  <text x="140" y="445" class="module-text">• Profiles</text>
+  <text x="140" y="455" class="module-text">• Roles</text>
+  
+  <rect x="230" y="400" width="120" height="70" fill="#fff2cc" stroke="#d6b656" stroke-width="1" rx="5"/>
+  <text x="290" y="420" class="module-title">Roadmaps</text>
+  <text x="290" y="435" class="module-text">• Learning Paths</text>
+  <text x="290" y="445" class="module-text">• Modules</text>
+  <text x="290" y="455" class="module-text">• Tasks</text>
+  
+  <rect x="380" y="400" width="120" height="70" fill="#fff2cc" stroke="#d6b656" stroke-width="1" rx="5"/>
+  <text x="440" y="420" class="module-title">Progress</text>
+  <text x="440" y="435" class="module-text">• User Progress</text>
+  <text x="440" y="445" class="module-text">• Completion</text>
+  <text x="440" y="455" class="module-text">• Timestamps</text>
+  
+  <rect x="530" y="400" width="120" height="70" fill="#fff2cc" stroke="#d6b656" stroke-width="1" rx="5"/>
+  <text x="590" y="420" class="module-title">Certificates</text>
+  <text x="590" y="435" class="module-text">• Issue Records</text>
+  <text x="590" y="445" class="module-text">• Asset URLs</text>
+  <text x="590" y="455" class="module-text">• Validation</text>
+  
+  <rect x="680" y="400" width="120" height="70" fill="#fff2cc" stroke="#d6b656" stroke-width="1" rx="5"/>
+  <text x="740" y="420" class="module-title">Badges</text>
+  <text x="740" y="435" class="module-text">• Badge Records</text>
+  <text x="740" y="445" class="module-text">• Asset URLs</text>
+  <text x="740" y="455" class="module-text">• Requirements</text>
+  
+  <rect x="830" y="400" width="120" height="70" fill="#fff2cc" stroke="#d6b656" stroke-width="1" rx="5"/>
+  <text x="890" y="420" class="module-title">Analytics</text>
+  <text x="890" y="435" class="module-text">• System Stats</text>
+  <text x="890" y="445" class="module-text">• User Metrics</text>
+  <text x="890" y="455" class="module-text">• Reports</text>
+  
+  <!-- Flow Arrows -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
+    </marker>
+  </defs>
+  
+  <line x1="540" y1="160" x2="540" y2="200" stroke="#666" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <line x1="540" y1="320" x2="540" y2="360" stroke="#666" stroke-width="3" marker-end="url(#arrowhead)"/>
+  
+  <!-- Flow Labels -->
+  <text x="570" y="185" class="flow-label">API Requests</text>
+  <text x="570" y="345" class="flow-label">Database Operations</text>
+  
+  <!-- Tech Stack Footer -->
+  <rect x="40" y="500" width="1000" height="30" fill="#f5f5f5" stroke="#666" stroke-width="1" rx="5"/>
+  <text x="540" y="520" class="tech-stack">Tech Stack: Node.js 16+ | Express.js 4.18.2 | MySQL 8.0+ | Bootstrap 5.3+ | JWT Auth | bcryptjs</text>
+</svg></svg>
