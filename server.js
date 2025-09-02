@@ -713,50 +713,78 @@ app.post('/api/progress/task', authenticateToken, async (req, res) => {
         let { taskId, completed } = req.body;
         const userId = req.user.userId;
 
-        // If 'completed' not provided (legacy frontend), toggle based on existing state.
+        // Validate taskId
+        if (!taskId || isNaN(taskId)) {
+            return res.status(400).json({ error: 'Invalid task ID' });
+        }
+
+        // If 'completed' not provided, toggle based on existing state
         if (typeof completed === 'undefined') {
             const [rows] = await pool.execute('SELECT completed FROM user_progress WHERE user_id = ? AND task_id = ?', [userId, taskId]);
             completed = !(rows.length && rows[0].completed === 1);
         }
 
+        // Update or insert progress
         if (completed) {
             await pool.execute(
-                'INSERT INTO user_progress (user_id, task_id, completed, completed_at) VALUES (?, ?, TRUE, NOW()) ON DUPLICATE KEY UPDATE completed = TRUE, completed_at = NOW()',
+                `INSERT INTO user_progress (user_id, task_id, completed, completed_at) 
+                 VALUES (?, ?, TRUE, NOW()) 
+                 ON DUPLICATE KEY UPDATE 
+                 completed = TRUE, 
+                 completed_at = NOW()`,
                 [userId, taskId]
             );
         } else {
+            // If uncompleting, update to false instead of deleting
             await pool.execute(
-                'DELETE FROM user_progress WHERE user_id = ? AND task_id = ?',
+                `INSERT INTO user_progress (user_id, task_id, completed, completed_at) 
+                 VALUES (?, ?, FALSE, NULL) 
+                 ON DUPLICATE KEY UPDATE 
+                 completed = FALSE, 
+                 completed_at = NULL`,
                 [userId, taskId]
             );
         }
-        
+
         // Check if roadmap is now complete
         const [[taskRow]] = await pool.query('SELECT m.roadmap_id FROM tasks t JOIN modules m ON t.module_id = m.id WHERE t.id=?', [taskId]);
+
+        let roadmapCompleted = false;
         if(taskRow) {
             const roadmapId = taskRow.roadmap_id;
-            
+
             // Check if roadmap was previously completed
             const [[prevStatus]] = await pool.query('SELECT completed_at FROM user_roadmaps WHERE user_id=? AND roadmap_id=?', [userId, roadmapId]);
             const wasAlreadyCompleted = prevStatus && prevStatus.completed_at !== null;
-            
+
+            // Count total vs completed tasks in this roadmap
             const [[counts]] = await pool.query(`
                 SELECT 
                     (SELECT COUNT(*) FROM tasks t JOIN modules m ON t.module_id=m.id WHERE m.roadmap_id=?) as total,
-                    (SELECT COUNT(DISTINCT up.task_id) FROM user_progress up JOIN tasks t ON up.task_id=t.id JOIN modules m ON t.module_id=m.id WHERE m.roadmap_id=? AND up.user_id=? AND up.completed=1) as done
+                    (SELECT COUNT(DISTINCT up.task_id) FROM user_progress up 
+                     JOIN tasks t ON up.task_id=t.id 
+                     JOIN modules m ON t.module_id=m.id 
+                     WHERE m.roadmap_id=? AND up.user_id=? AND up.completed=1) as done
             `, [roadmapId, roadmapId, userId]);
-            
-            const roadmapCompleted = counts.total > 0 && counts.done === counts.total;
-            const justCompleted = roadmapCompleted && !wasAlreadyCompleted;
-            
-            if(roadmapCompleted && !wasAlreadyCompleted){
+
+            const isCompleted = counts.total > 0 && counts.done === counts.total;
+            const justCompleted = isCompleted && !wasAlreadyCompleted;
+
+            // Update user_roadmaps completion status
+            if(isCompleted && !wasAlreadyCompleted){
                 await pool.execute('UPDATE user_roadmaps SET completed_at=NOW() WHERE user_id=? AND roadmap_id=?', [userId, roadmapId]);
+                roadmapCompleted = true;
+            } else if (!isCompleted && wasAlreadyCompleted) {
+                // If uncompleting and was completed, mark as not completed
+                await pool.execute('UPDATE user_roadmaps SET completed_at=NULL WHERE user_id=? AND roadmap_id=?', [userId, roadmapId]);
             }
-            
-            res.json({ message: 'Progress updated successfully', completed, roadmapCompleted: justCompleted });
-        } else {
-            res.json({ message: 'Progress updated successfully', completed });
         }
+
+        res.json({ 
+            message: 'Progress updated successfully', 
+            completed, 
+            roadmapCompleted 
+        });
     } catch (error) {
         console.error('Error updating progress:', error);
         res.status(500).json({ error: 'Internal server error' });
