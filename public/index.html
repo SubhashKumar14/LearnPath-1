@@ -751,38 +751,211 @@
     </div>
 
     <!-- Progress Page -->
-    <div id="progress-page" class="page">
-        <div class="container my-5">
-            <div class="row mb-4">
-                <div class="col-md-8">
-                    <h2 class="fw-bold mb-2">My Learning Progress</h2>
-                    <p class="text-muted">Track your learning journey and see your achievements</p>
-                </div>
-                <div class="col-md-4 text-end">
-                    <div class="overall-progress">
-                        <h6 class="text-muted mb-1">Overall Progress</h6>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-gradient" id="overall-progress-bar" style="width: 0%"></div>
+    <div id="progress-page" class="page container mt-4">
+        <!-- Page Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="#" onclick="showPage('home-page')">Home</a></li>
+                        <li class="breadcrumb-item active">My Progress</li>
+                    </ol>
+                </nav>
+                <h2 class="mb-3">
+                    <i class="fas fa-chart-line text-primary me-2"></i>
+                    My Learning Progress
+                </h2>
+                <p class="text-muted">Track your learning journey and see your achievements</p>
+            </div>
+        </div>
+
+        <!-- Progress Statistics -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="text-primary mb-2">
+                            <i class="fas fa-route fa-2x"></i>
                         </div>
-                        <small class="text-muted" id="overall-progress-text">0% Complete</small>
+                        <h4 class="mb-1" id="my-roadmaps-enrolled">0</h4>
+                        <small class="text-muted">Roadmaps Started</small>
                     </div>
                 </div>
             </div>
-            
-            <div class="row mb-4" id="progress-stats">
-                <!-- Progress stats will be loaded here -->
-            </div>
-            
-            <div class="row">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0 fw-bold">My Roadmaps</h5>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="text-success mb-2">
+                            <i class="fas fa-trophy fa-2x"></i>
                         </div>
-                        <div class="card-body" id="progress-roadmaps">
-                            <div class="text-center text-muted py-4">
-                                <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
-                                <p>Loading your progress...</p>
+                        <h4 class="mb-1" id="my-roadmaps-completed">0</h4>
+                        <small class="text-muted">Roadmaps Completed</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="text-info mb-2">
+                            <i class="fas fa-book fa-2x"></i>
+                        </div>
+                        <h4 class="mb-1" id="my-courses-enrolled">0</h4>
+                        <small class="text-muted">Courses Started</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="text-warning mb-2">
+                            <i class="fas fa-medal fa-2x"></i>
+                        </div>
+                        <h4 class="mb-1" id="my-badges-earned">0</h4>
+                        <small class="text-muted">Badges Earned</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <div class="row">
+            <div class="col-12">
+                <ul class="nav nav-tabs mb-4" id="progressTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="roadmaps-tab" data-bs-toggle="tab" 
+                                data-bs-target="#roadmaps-progress" type="button" role="tab">
+                            <i class="fas fa-route me-2"></i>My Roadmaps
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="courses-tab" data-bs-toggle="tab" 
+                                data-bs-target="#courses-progress" type="button" role="tab">
+                            <i class="fas fa-book me-2"></i>My Courses
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="activity-tab" data-bs-toggle="tab" 
+                                data-bs-target="#activity-progress" type="button" role="tab">
+                            <i class="fas fa-clock me-2"></i>Recent Activity
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="achievements-tab" data-bs-toggle="tab" 
+                                data-bs-target="#achievements-progress" type="button" role="tab">
+                            <i class="fas fa-trophy me-2"></i>Achievements
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="progressTabContent">
+                    <!-- Roadmaps Tab -->
+                    <div class="tab-pane fade show active" id="roadmaps-progress" role="tabpanel">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-route me-2"></i>My Learning Roadmaps
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="my-roadmaps-list">
+                                    <div class="text-center py-5">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p class="mt-3 text-muted">Loading your roadmaps...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Courses Tab -->
+                    <div class="tab-pane fade" id="courses-progress" role="tabpanel">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-book me-2"></i>My Courses
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="my-courses-list">
+                                    <div class="text-center py-5">
+                                        <div class="spinner-border text-info" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p class="mt-3 text-muted">Loading your courses...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Activity Tab -->
+                    <div class="tab-pane fade" id="activity-progress" role="tabpanel">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-clock me-2"></i>Recent Activity
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="my-activity-list">
+                                    <div class="text-center py-5">
+                                        <div class="spinner-border text-success" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p class="mt-3 text-muted">Loading your activity...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Achievements Tab -->
+                    <div class="tab-pane fade" id="achievements-progress" role="tabpanel">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-warning text-dark">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-trophy me-2"></i>Achievements & Badges
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Task Achievements</h6>
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between">
+                                                <span>Tasks Completed:</span>
+                                                <strong id="my-tasks-completed">0</strong>
+                                            </div>
+                                            <div class="d-flex justify-content-between">
+                                                <span>Lessons Completed:</span>
+                                                <strong id="my-lessons-completed">0</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>Earned Recognition</h6>
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between">
+                                                <span>Certificates:</span>
+                                                <strong id="my-certificates-earned">0</strong>
+                                            </div>
+                                            <div class="d-flex justify-content-between">
+                                                <span>Badges:</span>
+                                                <strong id="my-badges-earned-detail">0</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Achievement Milestones -->
+                                <div class="mt-4">
+                                    <h6>Achievement Milestones</h6>
+                                    <div class="row" id="achievement-milestones">
+                                        <!-- Will be populated by JavaScript -->
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -802,53 +975,145 @@
                 </div>
             </div>
             
-            <!-- Admin Stats -->
-            <div class="row mb-4" id="admin-stats">
-                <div class="col-md-2">
-                    <div class="card text-center">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h3 class="mb-3">Dashboard Overview</h3>
+                </div>
+                
+                <!-- Enhanced Statistics Cards -->
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                    <div class="card border-0 shadow-sm h-100 text-center">
                         <div class="card-body">
-                            <h4 class="text-primary fw-bold" id="stat-users">0</h4>
-                            <small class="text-muted">Users</small>
+                            <div class="text-primary mb-2">
+                                <i class="fas fa-users fa-2x"></i>
+                            </div>
+                            <h4 id="stat-users" class="mb-1">0</h4>
+                            <small class="text-muted">Total Users</small>
+                            <div class="mt-2">
+                                <small class="badge bg-light text-dark">
+                                    <span id="active-users-7d">0</span> active (7d)
+                                </small>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <div class="card text-center">
+
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                    <div class="card border-0 shadow-sm h-100 text-center">
                         <div class="card-body">
-                            <h4 class="text-success fw-bold" id="stat-roadmaps">0</h4>
+                            <div class="text-info mb-2">
+                                <i class="fas fa-route fa-2x"></i>
+                            </div>
+                            <h4 id="stat-roadmaps" class="mb-1">0</h4>
                             <small class="text-muted">Roadmaps</small>
+                            <div class="mt-2">
+                                <small class="badge bg-light text-dark">
+                                    <span id="roadmap-completion-rate">0</span>% completion
+                                </small>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <div class="card text-center">
+
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                    <div class="card border-0 shadow-sm h-100 text-center">
                         <div class="card-body">
-                            <h4 class="text-info fw-bold" id="stat-courses">0</h4>
+                            <div class="text-warning mb-2">
+                                <i class="fas fa-book fa-2x"></i>
+                            </div>
+                            <h4 id="stat-courses" class="mb-1">0</h4>
                             <small class="text-muted">Courses</small>
+                            <div class="mt-2">
+                                <small class="badge bg-light text-dark">
+                                    <span id="course-completion-rate">0</span>% completion
+                                </small>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <div class="card text-center">
+
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                    <div class="card border-0 shadow-sm h-100 text-center">
                         <div class="card-body">
-                            <h4 class="text-warning fw-bold" id="stat-tasks">0</h4>
-                            <small class="text-muted">Tasks</small>
+                            <div class="text-secondary mb-2">
+                                <i class="fas fa-tasks fa-2x"></i>
+                            </div>
+                            <h4 id="stat-tasks" class="mb-1">0</h4>
+                            <small class="text-muted">Total Tasks</small>
+                            <div class="mt-2">
+                                <small class="badge bg-light text-dark">
+                                    <span id="completed-tasks">0</span> completed
+                                </small>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <div class="card text-center">
+
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                    <div class="card border-0 shadow-sm h-100 text-center">
                         <div class="card-body">
-                            <h4 class="text-secondary fw-bold" id="stat-certificates">0</h4>
+                            <div class="text-success mb-2">
+                                <i class="fas fa-certificate fa-2x"></i>
+                            </div>
+                            <h4 id="stat-certificates" class="mb-1">0</h4>
                             <small class="text-muted">Certificates</small>
+                            <div class="mt-2">
+                                <small class="badge bg-light text-dark">
+                                    <span id="certificates-7d">0</span> this week
+                                </small>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <div class="card text-center">
+
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                    <div class="card border-0 shadow-sm h-100 text-center">
                         <div class="card-body">
-                            <h4 class="text-dark fw-bold" id="stat-badges">0</h4>
+                            <div class="text-danger mb-2">
+                                <i class="fas fa-medal fa-2x"></i>
+                            </div>
+                            <h4 id="stat-badges" class="mb-1">0</h4>
                             <small class="text-muted">Badges</small>
+                            <div class="mt-2">
+                                <small class="badge bg-light text-dark">
+                                    <span id="badges-7d">0</span> this week
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Analytics Section -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="fas fa-chart-bar me-2"></i>Analytics & Insights
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Most Popular Content</h6>
+                                    <div id="popular-content">
+                                        <div class="text-center py-3">
+                                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                                            <span class="ms-2">Loading analytics...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>User Engagement</h6>
+                                    <div id="user-engagement">
+                                        <div class="text-center py-3">
+                                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                                            <span class="ms-2">Loading engagement data...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

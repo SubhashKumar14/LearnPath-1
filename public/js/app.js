@@ -873,24 +873,53 @@ function displayRoadmapDetails(roadmap){
 
 function displayRoadmapModules(modules){ const container = document.getElementById('roadmap-modules'); if(!container) return; if(!modules.length){ container.innerHTML='<div class="text-center text-muted py-5"><i class="fas fa-puzzle-piece fa-2x mb-3"></i><p>No modules available.</p></div>'; return; } container.innerHTML = modules.map((m,i)=>`<div class="card mb-4"><div class="card-header"><h5 class="fw-bold mb-0"><span class="module-number me-2">${i+1}</span>${m.title}</h5></div><div class="card-body"><div class="tasks-list">${(m.tasks||[]).map(t=>{ const done = currentUser && userProgress[currentUser.id] && userProgress[currentUser.id][t.id]; return `<div class='task-item d-flex align-items-start gap-2 py-2 border-bottom ${done?'task-completed':''}'><div><input type='checkbox' class='form-check-input' id='task-${t.id}' ${done?'checked':''} ${currentUser?`onchange="updateTaskProgress(${t.id}, this.checked)"`:'disabled'}></div><div class='flex-grow-1'><label for='task-${t.id}' class='form-check-label fw-medium'>${t.title}</label>${t.description?`<small class='d-block text-muted'>${t.description}</small>`:''}${t.resource_url?`<a href='${t.resource_url}' target='_blank' class='btn btn-sm btn-outline-primary mt-1'><i class='fas fa-external-link-alt me-1'></i>Resource</a>`:''}</div></div>`; }).join('') || '<p class="text-muted">No tasks.</p>'}</div></div></div>`).join(''); }
 
-async function updateTaskProgress(taskId, completed){ if(!currentUser){ showAlert('Login to track progress','warning'); return; } try { 
-        const res = await fetch(`${API_BASE}/progress/task`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}`},body:JSON.stringify({taskId, completed})}); 
+async function updateTaskProgress(taskId, completed) {
+    if(!currentUser){
+        showAlert('Login to track progress','warning');
+        return;
+    }
+
+    try { 
+        // Get the checkbox element
+        const checkbox = document.getElementById(`task-${taskId}`);
+        const originalState = checkbox ? checkbox.checked : false;
+
+        // Optimistically update UI
+        if (checkbox) {
+            checkbox.checked = completed;
+            updateTaskDisplayState(taskId, completed);
+        }
+
+        const res = await fetch(`${API_BASE}/progress/task`, {
+            method:'POST',
+            headers:{
+                'Content-Type':'application/json',
+                'Authorization':`Bearer ${localStorage.getItem('authToken')}`
+            },
+            body:JSON.stringify({taskId, completed})
+        }); 
+
         if(res.ok){ 
             const data = await res.json();
-            
-            if(!userProgress[currentUser.id]) userProgress[currentUser.id]={}; 
-            if(completed) userProgress[currentUser.id][taskId]=true; 
-            else delete userProgress[currentUser.id][taskId]; 
-            
+
+            // Update user progress cache
+            if(!userProgress[currentUser.id]) userProgress[currentUser.id] = {}; 
+            if(completed) {
+                userProgress[currentUser.id][taskId] = true; 
+            } else {
+                userProgress[currentUser.id][taskId] = false;
+            }
+
+            // Refresh roadmap display to show updated progress
             if(currentRoadmap) displayRoadmapDetails(currentRoadmap); 
-            
-            showAlert(completed?'Task completed! 🎉':'Task marked incomplete','success'); 
-            
+
+            showAlert(completed ? 'Task completed! 🎉' : 'Task marked incomplete','success'); 
+
             // Check if roadmap just completed for the first time
             if(data.roadmapCompleted){
                 const completionKey = `roadmap_completed_${currentRoadmap.id}_${currentUser.id}`;
                 const alreadyCompleted = localStorage.getItem(completionKey);
-                
+
                 if (!alreadyCompleted) {
                     // First time completion - show modal and set flag
                     localStorage.setItem(completionKey, 'true');
@@ -898,17 +927,38 @@ async function updateTaskProgress(taskId, completed){ if(!currentUser){ showAler
                 }
             }
         } else { 
+            // Revert UI on error
+            if (checkbox) {
+                checkbox.checked = originalState;
+                updateTaskDisplayState(taskId, originalState);
+            }
+
             const data = await res.json(); 
-            showAlert(data.error||'Error updating progress','danger'); 
-            const cb=document.getElementById(`task-${taskId}`); 
-            if(cb) cb.checked=!completed; 
+            showAlert(data.error || 'Error updating progress','danger'); 
         } 
     } catch(e){ 
         console.error(e); 
         showAlert('Connection error','danger'); 
-        const cb=document.getElementById(`task-${taskId}`); 
-        if(cb) cb.checked=!completed; 
+
+        // Revert UI on error
+        const checkbox = document.getElementById(`task-${taskId}`); 
+        if(checkbox) {
+            checkbox.checked = !completed;
+            updateTaskDisplayState(taskId, !completed);
+        }
     } 
+}
+
+// Helper function to update task display state
+function updateTaskDisplayState(taskId, completed) {
+    const taskItem = document.querySelector(`[data-task-id="${taskId}"]`);
+    if (taskItem) {
+        if (completed) {
+            taskItem.classList.add('task-completed');
+        } else {
+            taskItem.classList.remove('task-completed');
+        }
+    }
 }
 
 async function startRoadmap(){ if(!currentUser) { showAlert('Login first','warning'); return;} if(!currentRoadmap){ showAlert('No roadmap selected','danger'); return;} try { const res = await fetch(`${API_BASE}/roadmaps/${currentRoadmap.id}/start`,{method:'POST',headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`}}); if(res.ok){ showAlert('Roadmap started!','success'); const btn=document.getElementById('start-roadmap-btn'); if(btn) btn.textContent='Continue Learning'; } else { const data = await res.json(); showAlert(data.error||'Error starting roadmap','danger'); } } catch(e){ showAlert('Connection error','danger'); }}
@@ -1098,7 +1148,8 @@ async function loadProgressPage() {
     if (!currentUser) return;
 
     try {
-        const response = await fetch(`${API_BASE}/progress/${currentUser.id}`, {
+        // Load comprehensive progress data using new API
+        const response = await fetch(`${API_BASE}/my-progress`, {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('authToken')}`
             }
@@ -1106,7 +1157,8 @@ async function loadProgressPage() {
 
         if (response.ok) {
             const progressData = await response.json();
-            displayProgressData(progressData);
+            displayMyProgressData(progressData);
+            await loadMyActivity(); // Load recent activity
         } else {
             showAlert('Error loading progress data', 'danger');
         }
@@ -1114,6 +1166,312 @@ async function loadProgressPage() {
         console.error('Error loading progress:', error);
         showAlert('Error loading progress data', 'danger');
     }
+}
+
+// Enhanced My Progress data display
+function displayMyProgressData(data) {
+    // Display overall statistics
+    displayProgressStats(data.stats);
+    
+    // Display roadmaps
+    displayMyRoadmaps(data.roadmaps);
+    
+    // Display courses
+    displayMyCourses(data.courses);
+    
+    // Update overall progress indicator
+    const overallProgress = data.stats.overall_progress || 0;
+    const progressBar = document.getElementById('overall-progress-bar');
+    const progressText = document.getElementById('overall-progress-text');
+    
+    if (progressBar) {
+        progressBar.style.width = `${overallProgress}%`;
+        progressBar.className = `progress-bar ${getProgressBarClass(overallProgress)}`;
+    }
+    
+    if (progressText) {
+        progressText.textContent = `${overallProgress}% Complete`;
+    }
+}
+
+// Display progress statistics cards
+function displayProgressStats(stats) {
+    const statsContainer = document.getElementById('progress-stats');
+    if (!statsContainer) return;
+    
+    statsContainer.innerHTML = `
+        <div class="col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-road text-primary me-2"></i>
+                        <h3 class="text-primary fw-bold mb-0">${stats.total_roadmaps || 0}</h3>
+                    </div>
+                    <p class="text-muted mb-1">Total Roadmaps</p>
+                    <small class="text-success">${stats.completed_roadmaps || 0} completed</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-book text-info me-2"></i>
+                        <h3 class="text-info fw-bold mb-0">${stats.total_courses || 0}</h3>
+                    </div>
+                    <p class="text-muted mb-1">Total Courses</p>
+                    <small class="text-success">${stats.completed_courses || 0} completed</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-tasks text-warning me-2"></i>
+                        <h3 class="text-warning fw-bold mb-0">${stats.total_tasks || 0}</h3>
+                    </div>
+                    <p class="text-muted mb-1">Total Tasks</p>
+                    <small class="text-success">${stats.completed_tasks || 0} completed</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-calendar-check text-success me-2"></i>
+                        <h3 class="text-success fw-bold mb-0">${stats.streak_days || 0}</h3>
+                    </div>
+                    <p class="text-muted mb-1">Day Streak</p>
+                    <small class="text-muted">Keep learning!</small>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Display My Roadmaps with enhanced progress tracking
+function displayMyRoadmaps(roadmaps) {
+    const container = document.getElementById('progress-roadmaps');
+    if (!container) return;
+    
+    if (!roadmaps || roadmaps.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-road fa-3x mb-3 text-muted"></i>
+                <h5>No roadmaps started yet</h5>
+                <p>Start your learning journey by choosing a roadmap</p>
+                <button class="btn btn-primary" onclick="showPage('roadmaps-page')">
+                    <i class="fas fa-plus me-1"></i>Browse Roadmaps
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    const roadmapsHTML = roadmaps.map(roadmap => {
+        const progress = parseFloat(roadmap.progress) || 0;
+        const progressClass = getProgressBarClass(progress);
+        const statusBadge = progress === 100 ? 
+            '<span class="badge bg-success ms-2"><i class="fas fa-check me-1"></i>Completed</span>' :
+            progress > 0 ? '<span class="badge bg-info ms-2"><i class="fas fa-play me-1"></i>In Progress</span>' :
+            '<span class="badge bg-secondary ms-2"><i class="fas fa-clock me-1"></i>Not Started</span>';
+
+        return `
+            <div class="card mb-4 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <div class="d-flex align-items-center mb-2">
+                                <h5 class="fw-bold mb-0">${roadmap.title}</h5>
+                                ${statusBadge}
+                            </div>
+                            <p class="text-muted mb-3">${roadmap.description || 'No description available'}</p>
+                            <div class="progress mb-2" style="height: 10px;">
+                                <div class="progress-bar ${progressClass}" 
+                                     role="progressbar" 
+                                     style="width: ${progress}%" 
+                                     aria-valuenow="${progress}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <small class="text-muted">
+                                        <i class="fas fa-chart-line me-1"></i>Progress: ${progress}%
+                                    </small>
+                                </div>
+                                <div class="col-sm-6">
+                                    <small class="text-muted">
+                                        <i class="fas fa-tasks me-1"></i>${roadmap.completed_tasks || 0} / ${roadmap.total_tasks || 0} tasks
+                                    </small>
+                                </div>
+                            </div>
+                            ${roadmap.last_activity ? `
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>Last activity: ${formatDate(roadmap.last_activity)}
+                                    </small>
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="col-md-4 text-md-end">
+                            <div class="d-flex flex-column gap-2">
+                                <button class="btn btn-primary btn-sm" onclick="viewRoadmap(${roadmap.id})">
+                                    <i class="fas fa-eye me-1"></i>View Details
+                                </button>
+                                ${progress > 0 ? `
+                                    <button class="btn btn-outline-success btn-sm" onclick="continueRoadmap(${roadmap.id})">
+                                        <i class="fas fa-play me-1"></i>Continue Learning
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-outline-primary btn-sm" onclick="startRoadmap(${roadmap.id})">
+                                        <i class="fas fa-rocket me-1"></i>Start Learning
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = roadmapsHTML;
+}
+
+// Display My Courses
+function displayMyCourses(courses) {
+    const container = document.getElementById('progress-courses');
+    if (!container) return;
+    
+    if (!courses || courses.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-book fa-2x mb-3 text-muted"></i>
+                <h6>No courses enrolled yet</h6>
+                <p class="small">Enroll in courses to track your progress</p>
+                <button class="btn btn-outline-primary btn-sm" onclick="showPage('courses-page')">
+                    <i class="fas fa-search me-1"></i>Browse Courses
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    const coursesHTML = courses.map(course => {
+        const progress = parseFloat(course.progress) || 0;
+        const progressClass = getProgressBarClass(progress);
+
+        return `
+            <div class="col-md-6 mb-3">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-2">${course.title}</h6>
+                        <p class="text-muted small mb-3">${course.description || 'No description'}</p>
+                        <div class="progress mb-2" style="height: 6px;">
+                            <div class="progress-bar ${progressClass}" style="width: ${progress}%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">${progress}% complete</small>
+                            <small class="text-muted">${course.completed_lessons || 0}/${course.total_lessons || 0} lessons</small>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm mt-2 w-100" 
+                                onclick="viewCourse(${course.id})">
+                            <i class="fas fa-eye me-1"></i>View Course
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = `<div class="row">${coursesHTML}</div>`;
+}
+
+// Load recent activity
+async function loadMyActivity() {
+    try {
+        const response = await fetch(`${API_BASE}/my-progress/activity`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            }
+        });
+
+        if (response.ok) {
+            const activities = await response.json();
+            displayMyActivity(activities);
+        }
+    } catch (error) {
+        console.error('Error loading activity:', error);
+    }
+}
+
+// Display recent activity
+function displayMyActivity(activities) {
+    const container = document.getElementById('recent-activity');
+    if (!container) return;
+    
+    if (!activities || activities.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-clock fa-2x mb-3"></i>
+                <p>No recent activity</p>
+            </div>
+        `;
+        return;
+    }
+
+    const activitiesHTML = activities.map(activity => `
+        <div class="d-flex align-items-center mb-3 p-3 border rounded">
+            <div class="me-3">
+                ${getActivityTypeIcon(activity.type)}
+            </div>
+            <div class="flex-grow-1">
+                <div class="fw-bold small">${activity.description}</div>
+                <div class="text-muted small">${formatDate(activity.created_at)}</div>
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = activitiesHTML;
+}
+
+// Helper function to get progress bar color class
+function getProgressBarClass(progress) {
+    if (progress >= 100) return 'bg-success';
+    if (progress >= 75) return 'bg-info';
+    if (progress >= 50) return 'bg-warning';
+    if (progress >= 25) return 'bg-primary';
+    return 'bg-secondary';
+}
+
+// Helper function to get activity type icon
+function getActivityTypeIcon(type) {
+    const icons = {
+        'task': '<i class="fas fa-check-circle text-success"></i>',
+        'lesson': '<i class="fas fa-book-open text-info"></i>',
+        'roadmap': '<i class="fas fa-road text-primary"></i>',
+        'course': '<i class="fas fa-graduation-cap text-warning"></i>'
+    };
+    return icons[type] || '<i class="fas fa-circle text-muted"></i>';
+}
+
+// Helper function to format dates
+function formatDate(dateString) {
+    if (!dateString) return 'Unknown';
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays <= 7) return `${diffDays} days ago`;
+    
+    return date.toLocaleDateString();
 }
 
 // Display progress data
@@ -1362,6 +1720,81 @@ function continueRoadmap(roadmapId) {
     viewRoadmap(roadmapId);
 }
 
+// Start roadmap with ID parameter (for My Progress page)
+async function startRoadmap(roadmapId) {
+    if (!currentUser) {
+        showAlert('Login first', 'warning');
+        return;
+    }
+
+    if (roadmapId) {
+        // Called from My Progress page with specific roadmap ID
+        try {
+            const res = await fetch(`${API_BASE}/roadmaps/${roadmapId}/start`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (res.ok) {
+                showAlert('Roadmap started!', 'success');
+                // Redirect to the roadmap details
+                viewRoadmap(roadmapId);
+            } else {
+                const data = await res.json();
+                showAlert(data.error || 'Error starting roadmap', 'danger');
+            }
+        } catch (e) {
+            console.error('Error starting roadmap:', e);
+            showAlert('Connection error', 'danger');
+        }
+    } else {
+        // Legacy behavior - start current roadmap
+        if (!currentRoadmap) {
+            showAlert('No roadmap selected', 'danger');
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_BASE}/roadmaps/${currentRoadmap.id}/start`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (res.ok) {
+                showAlert('Roadmap started!', 'success');
+                const btn = document.getElementById('start-roadmap-btn');
+                if (btn) btn.textContent = 'Continue Learning';
+            } else {
+                const data = await res.json();
+                showAlert(data.error || 'Error starting roadmap', 'danger');
+            }
+        } catch (e) {
+            console.error('Error starting roadmap:', e);
+            showAlert('Connection error', 'danger');
+        }
+    }
+}
+
+// View course (for My Progress page)
+function viewCourse(courseId) {
+    if (!courseId) {
+        showAlert('Invalid course ID', 'danger');
+        return;
+    }
+
+    // Navigate to courses page and open the specific course
+    showPage('courses-page');
+    
+    // After a brief delay to allow page load, open the course
+    setTimeout(() => {
+        openCourse(courseId);
+    }, 100);
+}
+
 // Toggle task completion
 async function toggleTaskCompletion(taskId, moduleId) {
     try {
@@ -1422,32 +1855,105 @@ function updateTaskUI(taskId, completed) {
 function showRoadmapCompletionModal() {
     const modal = `
         <div class="modal fade" id="completionModal" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-dialog modal-lg">
                 <div class="modal-content">
-                    <div class="modal-body text-center p-5">
-                        <i class="fas fa-trophy text-warning fa-4x mb-3"></i>
-                        <h3 class="fw-bold text-success mb-3">Congratulations!</h3>
-                        <p class="lead">You've completed the roadmap: <strong>${currentRoadmap.title}</strong></p>
-                        <p class="text-muted">You can now generate a badge for this achievement!</p>
-                        <div class="d-flex gap-3 justify-content-center mt-4">
-                            <button class="btn btn-primary" onclick="requestCertificate()">
-                                <i class="fas fa-medal me-2"></i>Generate Badge
-                            </button>
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-trophy me-2"></i>
+                            Congratulations! 🎉
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body text-center py-4">
+                        <div class="mb-4">
+                            <i class="fas fa-medal fa-4x text-warning mb-3"></i>
+                            <h4>Roadmap Completed!</h4>
+                            <p class="lead">You've successfully completed: <strong>${currentRoadmap.title}</strong></p>
+                            <p class="text-muted">Your dedication and hard work have paid off!</p>
                         </div>
+
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            You can now generate a digital badge to showcase your achievement!
+                        </div>
+                    </div>
+                    <div class="modal-footer justify-content-center">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-warning" onclick="generateRoadmapBadge()">
+                            <i class="fas fa-medal me-2"></i>Generate Badge
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
     `;
-    
+
+    // Remove existing modal if present
+    const existingModal = document.getElementById('completionModal');
+    if (existingModal) existingModal.remove();
+
     document.body.insertAdjacentHTML('beforeend', modal);
     const modalElement = new bootstrap.Modal(document.getElementById('completionModal'));
     modalElement.show();
-    
+
     // Remove modal from DOM after it's hidden
     document.getElementById('completionModal').addEventListener('hidden.bs.modal', function() {
         this.remove();
     });
+}
+
+async function generateRoadmapBadge() {
+    if (!currentRoadmap) return;
+
+    try {
+        // Show loading state
+        const generateBtn = document.querySelector('[onclick="generateRoadmapBadge()"]');
+        const originalText = generateBtn.innerHTML;
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Generating...';
+        generateBtn.disabled = true;
+
+        const response = await fetch(`${API_BASE}/roadmaps/${currentRoadmap.id}/generate-badge`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            // Hide the completion modal
+            bootstrap.Modal.getInstance(document.getElementById('completionModal')).hide();
+
+            // Show success message
+            showAlert('Badge generated successfully! Opening in new tab...', 'success');
+
+            // Open badge in new tab
+            setTimeout(() => {
+                window.open(result.badgeUrl, '_blank');
+            }, 1000);
+
+        } else {
+            if (result.alreadyExists) {
+                showAlert('Badge already exists for this roadmap!', 'info');
+                bootstrap.Modal.getInstance(document.getElementById('completionModal')).hide();
+            } else {
+                showAlert(result.error || 'Failed to generate badge', 'danger');
+            }
+        }
+
+    } catch (error) {
+        console.error('Error generating badge:', error);
+        showAlert('Failed to generate badge', 'danger');
+    } finally {
+        // Reset button
+        const generateBtn = document.querySelector('[onclick="generateRoadmapBadge()"]');
+        if (generateBtn) {
+            generateBtn.innerHTML = originalText;
+            generateBtn.disabled = false;
+        }
+    }
 }
 
 // Show course completion modal
@@ -2686,66 +3192,44 @@ async function requestCourseCertificate(){
 
 // Generate course certificate
 async function generateCourseCertificate() {
+    if (!currentCourse) return;
+
     try {
-        const studentName = document.getElementById('course-student-name').value;
-        const completionDate = document.getElementById('course-completion-date').value;
-        
-        if (!studentName || !completionDate) {
-            showAlert('Please fill in all required fields', 'warning');
-            return;
+        const response = await fetch(`${API_BASE}/courses/${currentCourse.id}/generate-certificate`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            // Hide any open modal
+            const openModal = document.querySelector('.modal.show');
+            if (openModal) {
+                bootstrap.Modal.getInstance(openModal).hide();
+            }
+
+            showAlert('Certificate generated successfully! Opening in new tab...', 'success');
+
+            // Open certificate in new tab
+            setTimeout(() => {
+                window.open(result.certificateUrl, '_blank');
+            }, 1000);
+
+        } else {
+            if (result.alreadyExists) {
+                showAlert('Certificate already exists for this course!', 'info');
+            } else {
+                showAlert(result.error || 'Failed to generate certificate', 'danger');
+            }
         }
-        
-        // Generate a unique certificate ID
-        const certificateId = 'CERT-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-        
-        // Create certificate data
-        const certificateData = {
-            studentName: studentName,
-            courseName: currentCourse.title,
-            completionDate: completionDate,
-            certificateId: certificateId,
-            instructorName: 'LearnPath Team' // You can make this configurable
-        };
-        
-        // Save certificate data to localStorage for the certificate page to access
-        localStorage.setItem('currentCertificateData', JSON.stringify(certificateData));
-        
-        // Hide modal
-        bootstrap.Modal.getInstance(document.querySelector('.modal.show')).hide();
-        
-        // Record the certificate generation in the backend
-        try {
-            await fetch('/api/certificates/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...authHeaders()
-                },
-                body: JSON.stringify({
-                    courseId: currentCourse.id,
-                    studentName: studentName,
-                    completionDate: completionDate,
-                    certificateId: certificateId
-                })
-            });
-        } catch (error) {
-            console.error('Error recording certificate in backend:', error);
-        }
-        
-        // Redirect to certificate page
-        window.open(`certificate.html?student=${encodeURIComponent(studentName)}&course=${encodeURIComponent(currentCourse.title)}&date=${encodeURIComponent(completionDate)}&id=${encodeURIComponent(certificateId)}&instructor=${encodeURIComponent('LearnPath Team')}`, '_blank');
-        
-        showAlert('Certificate generated successfully!', 'success');
-        
-        // Update UI
-        currentCourse.certificate_requested = true;
-        if (typeof updateCourseActionButtons === 'function') {
-            updateCourseActionButtons(currentCourse);
-        }
-        
+
     } catch (error) {
         console.error('Error generating certificate:', error);
-        showAlert('Error generating certificate', 'danger');
+        showAlert('Failed to generate certificate', 'danger');
     }
 }
 
@@ -2839,10 +3323,238 @@ function showPage(pageId){
     const tp=document.getElementById(pageId); if(tp) tp.classList.add('active');
     switch(pageId){
         case 'profile-page': if(currentUser) loadProfileData(); break;
-        case 'progress-page': if(currentUser) loadProgressPage(); break;
+        case 'progress-page': if(currentUser) loadMyProgressPage(); break;
         case 'admin-page': if(currentUser && currentUser.role==='admin'){ loadAdminStats(); loadAdminRoadmaps(); adminLoadCourses(); loadAdminRequestsSummary(); } break;
         case 'courses-page': loadCourses(); break;
     }
+}
+
+// My Progress page functionality
+async function loadMyProgressPage() {
+    if (!currentUser) {
+        showPage('login-page');
+        return;
+    }
+
+    try {
+        // Load main progress data
+        const progressResponse = await fetch(`${API_BASE}/my-progress`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+
+        if (!progressResponse.ok) {
+            throw new Error('Failed to load progress data');
+        }
+
+        const progressData = await progressResponse.json();
+
+        // Display progress statistics
+        displayProgressStats(progressData.stats);
+
+        // Display roadmaps progress
+        displayMyRoadmaps(progressData.roadmaps);
+
+        // Display courses progress  
+        displayMyCourses(progressData.courses);
+
+        // Load recent activity
+        loadMyActivity();
+
+    } catch (error) {
+        console.error('Error loading My Progress:', error);
+        showAlert('Failed to load progress data', 'danger');
+    }
+}
+
+function displayProgressStats(stats) {
+    // Update progress statistics in the UI
+    const elements = {
+        'my-roadmaps-enrolled': stats.roadmaps_enrolled || 0,
+        'my-roadmaps-completed': stats.roadmaps_completed || 0,
+        'my-courses-enrolled': stats.courses_enrolled || 0,
+        'my-courses-completed': stats.courses_completed || 0,
+        'my-tasks-completed': stats.total_tasks_completed || 0,
+        'my-lessons-completed': stats.total_lessons_completed || 0,
+        'my-badges-earned': stats.badges_earned || 0,
+        'my-certificates-earned': stats.certificates_earned || 0
+    };
+
+    Object.entries(elements).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
+    });
+}
+
+function displayMyRoadmaps(roadmaps) {
+    const container = document.getElementById('my-roadmaps-list');
+    if (!container) return;
+
+    if (!roadmaps || roadmaps.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <i class="fas fa-route fa-3x text-muted mb-3"></i>
+                <h5>No Roadmaps Started</h5>
+                <p class="text-muted">Start your learning journey by choosing a roadmap</p>
+                <button class="btn btn-primary" onclick="showPage('roadmaps-page')">Browse Roadmaps</button>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = roadmaps.map(roadmap => `
+        <div class="card mb-3 roadmap-progress-card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6 class="card-title mb-2">${roadmap.title}</h6>
+                        <p class="text-muted small mb-2">${roadmap.description || ''}</p>
+                        <div class="d-flex gap-2 mb-2">
+                            <span class="badge bg-primary">${roadmap.difficulty}</span>
+                            <span class="badge bg-secondary">${roadmap.duration} days</span>
+                            ${roadmap.completed_at ? '<span class="badge bg-success">Completed</span>' : ''}
+                        </div>
+                        <small class="text-muted">
+                            Started: ${new Date(roadmap.started_at).toLocaleDateString()}
+                            ${roadmap.completed_at ? ` • Completed: ${new Date(roadmap.completed_at).toLocaleDateString()}` : ''}
+                        </small>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="progress mb-2" style="height: 8px;">
+                            <div class="progress-bar ${roadmap.progress_percentage >= 100 ? 'bg-success' : 'bg-primary'}" 
+                                 style="width: ${roadmap.progress_percentage || 0}%"></div>
+                        </div>
+                        <div class="text-center">
+                            <strong>${Math.round(roadmap.progress_percentage || 0)}%</strong>
+                            <div class="small text-muted">
+                                ${roadmap.completed_tasks}/${roadmap.total_tasks} tasks
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary mt-2" 
+                                    onclick="viewRoadmap(${roadmap.id})">
+                                ${roadmap.completed_at ? 'Review' : 'Continue'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function displayMyCourses(courses) {
+    const container = document.getElementById('my-courses-list');
+    if (!container) return;
+
+    if (!courses || courses.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <i class="fas fa-book fa-3x text-muted mb-3"></i>
+                <h5>No Courses Started</h5>
+                <p class="text-muted">Enhance your skills with our courses</p>
+                <button class="btn btn-primary" onclick="showPage('courses-page')">Browse Courses</button>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = courses.map(course => `
+        <div class="card mb-3 course-progress-card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6 class="card-title mb-2">${course.title}</h6>
+                        <p class="text-muted small mb-2">${course.description || ''}</p>
+                        <div class="d-flex gap-2 mb-2">
+                            <span class="badge bg-info">${course.difficulty}</span>
+                            <span class="badge bg-secondary">${course.duration} hours</span>
+                            ${course.completed_at ? '<span class="badge bg-success">Completed</span>' : ''}
+                        </div>
+                        <small class="text-muted">
+                            Started: ${new Date(course.enrolled_at).toLocaleDateString()}
+                            ${course.completed_at ? ` • Completed: ${new Date(course.completed_at).toLocaleDateString()}` : ''}
+                        </small>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="progress mb-2" style="height: 8px;">
+                            <div class="progress-bar ${course.progress >= 100 ? 'bg-success' : 'bg-primary'}" 
+                                 style="width: ${course.progress || 0}%"></div>
+                        </div>
+                        <div class="text-center">
+                            <strong>${Math.round(course.progress || 0)}%</strong>
+                            <div class="small text-muted">
+                                ${course.completed_lessons}/${course.total_lessons} lessons
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary mt-2" 
+                                    onclick="openCourse(${course.id})">
+                                ${course.completed_at ? 'Review' : 'Continue'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function loadMyActivity() {
+    try {
+        const response = await fetch(`${API_BASE}/my-progress/activity`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+
+        if (response.ok) {
+            const activities = await response.json();
+            displayMyActivity(activities);
+        }
+    } catch (error) {
+        console.error('Error loading activity:', error);
+    }
+}
+
+function displayMyActivity(activities) {
+    const container = document.getElementById('my-activity-list');
+    if (!container) return;
+
+    if (!activities || activities.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-3">No recent activity</div>';
+        return;
+    }
+
+    container.innerHTML = activities.map(activity => {
+        const icon = getActivityTypeIcon(activity.activity_type);
+        return `
+            <div class="d-flex align-items-center mb-3">
+                <div class="activity-icon me-3">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">${activity.description}</div>
+                    <small class="text-muted">in ${activity.context_title}</small>
+                </div>
+                <small class="text-muted">${formatDate(activity.activity_date)}</small>
+            </div>
+        `;
+    }).join('');
+}
+
+function getActivityTypeIcon(type) {
+    const icons = {
+        'task_completed': 'fa-check-circle text-success',
+        'lesson_completed': 'fa-play-circle text-primary',
+        'roadmap_enrolled': 'fa-route text-info',
+        'course_enrolled': 'fa-book text-info'
+    };
+    return icons[type] || 'fa-circle';
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
 }
 
 // EOF

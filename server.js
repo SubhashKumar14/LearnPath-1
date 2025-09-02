@@ -813,6 +813,124 @@ app.get('/api/roadmaps/:id/progress', authenticateToken, async (req, res) => {
     }
 });
 
+// Enhanced My Progress API - Get user's learning overview
+app.get('/api/my-progress', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // Get user's roadmap progress
+        const [roadmapProgress] = await pool.execute(`
+            SELECT 
+                r.id, r.title, r.description, r.difficulty, r.duration,
+                ur.enrolled_at as started_at, ur.completed_at,
+                COUNT(DISTINCT t.id) as total_tasks,
+                COUNT(DISTINCT CASE WHEN up.completed = 1 THEN up.task_id END) as completed_tasks,
+                ROUND(
+                    COUNT(DISTINCT CASE WHEN up.completed = 1 THEN up.task_id END) * 100.0 / 
+                    NULLIF(COUNT(DISTINCT t.id), 0), 2
+                ) as progress_percentage
+            FROM user_roadmaps ur
+            JOIN roadmaps r ON ur.roadmap_id = r.id
+            LEFT JOIN modules m ON r.id = m.roadmap_id
+            LEFT JOIN tasks t ON m.id = t.module_id
+            LEFT JOIN user_progress up ON t.id = up.task_id AND up.user_id = ?
+            WHERE ur.user_id = ?
+            GROUP BY r.id, r.title, ur.enrolled_at, ur.completed_at
+            ORDER BY ur.enrolled_at DESC
+        `, [userId, userId]);
+
+        // Get user's course progress
+        const [courseProgress] = await pool.execute(`
+            SELECT 
+                c.id, c.title, c.description, c.difficulty, c.duration,
+                uc.enrolled_at, uc.completed_at, uc.progress,
+                COUNT(DISTINCT cl.id) as total_lessons,
+                COUNT(DISTINCT CASE WHEN lp.completed = 1 THEN lp.lesson_id END) as completed_lessons
+            FROM user_courses uc
+            JOIN courses c ON uc.course_id = c.id
+            LEFT JOIN course_lessons cl ON c.id = cl.course_id
+            LEFT JOIN lesson_progress lp ON cl.id = lp.lesson_id AND lp.user_id = ?
+            WHERE uc.user_id = ?
+            GROUP BY c.id, c.title, uc.enrolled_at, uc.completed_at, uc.progress
+            ORDER BY uc.enrolled_at DESC
+        `, [userId, userId]);
+
+        // Get overall statistics
+        const [stats] = await pool.execute(`
+            SELECT 
+                COUNT(DISTINCT ur.roadmap_id) as roadmaps_enrolled,
+                COUNT(DISTINCT CASE WHEN ur.completed_at IS NOT NULL THEN ur.roadmap_id END) as roadmaps_completed,
+                COUNT(DISTINCT uc.course_id) as courses_enrolled,
+                COUNT(DISTINCT CASE WHEN uc.completed_at IS NOT NULL THEN uc.course_id END) as courses_completed,
+                COUNT(DISTINCT up.task_id) as total_tasks_completed,
+                COUNT(DISTINCT lp.lesson_id) as total_lessons_completed,
+                COUNT(DISTINCT b.id) as badges_earned,
+                COUNT(DISTINCT cert.id) as certificates_earned
+            FROM users u
+            LEFT JOIN user_roadmaps ur ON u.id = ur.user_id
+            LEFT JOIN user_courses uc ON u.id = uc.user_id
+            LEFT JOIN user_progress up ON u.id = up.user_id AND up.completed = 1
+            LEFT JOIN lesson_progress lp ON u.id = lp.user_id AND lp.completed = 1
+            LEFT JOIN badges b ON u.id = b.user_id
+            LEFT JOIN certificates cert ON u.id = cert.user_id
+            WHERE u.id = ?
+        `, [userId]);
+
+        res.json({
+            roadmaps: roadmapProgress,
+            courses: courseProgress,
+            stats: stats[0] || {}
+        });
+
+    } catch (error) {
+        console.error('Error fetching my progress:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get user's recent activity for My Progress
+app.get('/api/my-progress/activity', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        const [activities] = await pool.execute(`
+            (SELECT 'task_completed' as activity_type,
+                    CONCAT('Completed task: ', t.title) as description,
+                    r.title as context_title,
+                    up.completed_at as activity_date
+             FROM user_progress up
+             JOIN tasks t ON up.task_id = t.id
+             JOIN modules m ON t.module_id = m.id
+             JOIN roadmaps r ON m.roadmap_id = r.id
+             WHERE up.user_id = ? AND up.completed = 1 AND up.completed_at IS NOT NULL)
+            UNION ALL
+            (SELECT 'lesson_completed' as activity_type,
+                    CONCAT('Completed lesson: ', cl.title) as description,
+                    c.title as context_title,
+                    lp.completed_at as activity_date
+             FROM lesson_progress lp
+             JOIN course_lessons cl ON lp.lesson_id = cl.id
+             JOIN courses c ON cl.course_id = c.id
+             WHERE lp.user_id = ? AND lp.completed = 1 AND lp.completed_at IS NOT NULL)
+            UNION ALL
+            (SELECT 'roadmap_enrolled' as activity_type,
+                    CONCAT('Started roadmap: ', r.title) as description,
+                    r.title as context_title,
+                    ur.enrolled_at as activity_date
+             FROM user_roadmaps ur
+             JOIN roadmaps r ON ur.roadmap_id = r.id
+             WHERE ur.user_id = ?)
+            ORDER BY activity_date DESC
+            LIMIT 20
+        `, [userId, userId, userId]);
+
+        res.json(activities);
+    } catch (error) {
+        console.error('Error fetching user activity:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 app.post('/api/roadmaps/:id/start', authenticateToken, async (req, res) => {
     try {
         const roadmapId = req.params.id;
@@ -1033,20 +1151,141 @@ app.delete('/api/admin/tasks/:id', authenticateToken, requireAdmin, async (req, 
 // Admin dashboard stats
 app.get('/api/admin/stats', authenticateToken, requireAdmin, async (req, res) => {
     try {
+        // Get comprehensive admin statistics
         const [stats] = await pool.execute(`
             SELECT 
-                (SELECT COUNT(*) FROM users) as total_users,
+                (SELECT COUNT(*) FROM users WHERE role = 'user') as total_users,
+                (SELECT COUNT(*) FROM users WHERE role = 'user' AND last_login >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as active_users_30d,
+                (SELECT COUNT(*) FROM users WHERE role = 'user' AND last_login >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as active_users_7d,
                 (SELECT COUNT(*) FROM roadmaps) as total_roadmaps,
                 (SELECT COUNT(*) FROM courses) as total_courses,
+                (SELECT COUNT(*) FROM modules) as total_modules,
                 (SELECT COUNT(*) FROM tasks) as total_tasks,
+                (SELECT COUNT(*) FROM course_lessons) as total_lessons,
+                (SELECT COUNT(*) FROM user_roadmaps) as total_roadmap_enrollments,
+                (SELECT COUNT(*) FROM user_courses) as total_course_enrollments,
                 (SELECT COUNT(*) FROM user_progress WHERE completed = 1) as completed_tasks,
+                (SELECT COUNT(*) FROM lesson_progress WHERE completed = 1) as completed_lessons,
                 (SELECT COUNT(*) FROM certificates) as certificates_issued,
-                (SELECT COUNT(*) FROM badges) as badges_issued
+                (SELECT COUNT(*) FROM badges) as badges_issued,
+                (SELECT COUNT(*) FROM user_roadmaps WHERE completed_at IS NOT NULL) as completed_roadmaps,
+                (SELECT COUNT(*) FROM user_courses WHERE completed_at IS NOT NULL) as completed_courses
         `);
-        
-        res.json(stats[0]);
+
+        // Get completion rates
+        const [completionRates] = await pool.execute(`
+            SELECT 
+                ROUND(
+                    (SELECT COUNT(*) FROM user_roadmaps WHERE completed_at IS NOT NULL) * 100.0 / 
+                    NULLIF((SELECT COUNT(*) FROM user_roadmaps), 0), 2
+                ) as roadmap_completion_rate,
+                ROUND(
+                    (SELECT COUNT(*) FROM user_courses WHERE completed_at IS NOT NULL) * 100.0 / 
+                    NULLIF((SELECT COUNT(*) FROM user_courses), 0), 2
+                ) as course_completion_rate
+        `);
+
+        // Get recent activity counts
+        const [recentActivity] = await pool.execute(`
+            SELECT 
+                (SELECT COUNT(*) FROM user_roadmaps WHERE enrolled_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as new_roadmap_enrollments_7d,
+                (SELECT COUNT(*) FROM user_courses WHERE enrolled_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as new_course_enrollments_7d,
+                (SELECT COUNT(*) FROM user_progress WHERE completed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND completed = 1) as tasks_completed_7d,
+                (SELECT COUNT(*) FROM lesson_progress WHERE completed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND completed = 1) as lessons_completed_7d,
+                (SELECT COUNT(*) FROM certificates WHERE issued_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as certificates_issued_7d,
+                (SELECT COUNT(*) FROM badges WHERE issued_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as badges_issued_7d
+        `);
+
+        // Combine all statistics
+        const combinedStats = {
+            ...stats[0],
+            ...completionRates[0],
+            ...recentActivity[0]
+        };
+
+        res.json(combinedStats);
+
     } catch (error) {
         console.error('Error fetching admin stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// GET user analytics for admin
+app.get('/api/admin/user-analytics', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        // Get user registration trends (last 30 days)
+        const [registrationTrend] = await pool.execute(`
+            SELECT DATE(created_at) as date, COUNT(*) as registrations 
+            FROM users 
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) 
+            GROUP BY DATE(created_at) 
+            ORDER BY date DESC
+        `);
+
+        // Get most active users
+        const [activeUsers] = await pool.execute(`
+            SELECT 
+                u.username,
+                u.email,
+                COUNT(DISTINCT ur.roadmap_id) as roadmaps_enrolled,
+                COUNT(DISTINCT uc.course_id) as courses_enrolled,
+                COUNT(DISTINCT up.task_id) as tasks_completed,
+                COUNT(DISTINCT lp.lesson_id) as lessons_completed,
+                u.last_login
+            FROM users u
+            LEFT JOIN user_roadmaps ur ON u.id = ur.user_id
+            LEFT JOIN user_courses uc ON u.id = uc.user_id
+            LEFT JOIN user_progress up ON u.id = up.user_id AND up.completed = 1
+            LEFT JOIN lesson_progress lp ON u.id = lp.user_id AND lp.completed = 1
+            WHERE u.role = 'user'
+            GROUP BY u.id, u.username, u.email, u.last_login
+            ORDER BY (tasks_completed + lessons_completed) DESC
+            LIMIT 10
+        `);
+
+        // Get content popularity
+        const [popularRoadmaps] = await pool.execute(`
+            SELECT 
+                r.title,
+                COUNT(ur.user_id) as enrollment_count,
+                COUNT(CASE WHEN ur.completed_at IS NOT NULL THEN ur.user_id END) as completion_count,
+                ROUND(
+                    COUNT(CASE WHEN ur.completed_at IS NOT NULL THEN ur.user_id END) * 100.0 / 
+                    NULLIF(COUNT(ur.user_id), 0), 2
+                ) as completion_rate
+            FROM roadmaps r
+            LEFT JOIN user_roadmaps ur ON r.id = ur.roadmap_id
+            GROUP BY r.id, r.title
+            ORDER BY enrollment_count DESC
+            LIMIT 10
+        `);
+
+        const [popularCourses] = await pool.execute(`
+            SELECT 
+                c.title,
+                COUNT(uc.user_id) as enrollment_count,
+                COUNT(CASE WHEN uc.completed_at IS NOT NULL THEN uc.user_id END) as completion_count,
+                ROUND(
+                    COUNT(CASE WHEN uc.completed_at IS NOT NULL THEN uc.user_id END) * 100.0 / 
+                    NULLIF(COUNT(uc.user_id), 0), 2
+                ) as completion_rate
+            FROM courses c
+            LEFT JOIN user_courses uc ON c.id = uc.course_id
+            GROUP BY c.id, c.title
+            ORDER BY enrollment_count DESC
+            LIMIT 10
+        `);
+
+        res.json({
+            registrationTrend,
+            activeUsers,
+            popularRoadmaps,
+            popularCourses
+        });
+
+    } catch (error) {
+        console.error('Error fetching user analytics:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -1985,6 +2224,262 @@ app.get('/api/roadmaps/:id/badge-status', authenticateToken, async (req, res) =>
         
     } catch (error) {
         console.error('Error checking badge status:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Enhanced My Progress API - Get user's learning overview
+app.get('/api/my-progress', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // Get user's roadmap progress
+        const [roadmapProgress] = await pool.execute(`
+            SELECT 
+                r.id, r.title, r.description, r.difficulty, r.duration,
+                ur.enrolled_at as started_at, ur.completed_at,
+                COUNT(DISTINCT t.id) as total_tasks,
+                COUNT(DISTINCT CASE WHEN up.completed = 1 THEN up.task_id END) as completed_tasks,
+                ROUND(
+                    COUNT(DISTINCT CASE WHEN up.completed = 1 THEN up.task_id END) * 100.0 / 
+                    NULLIF(COUNT(DISTINCT t.id), 0), 2
+                ) as progress_percentage
+            FROM user_roadmaps ur
+            JOIN roadmaps r ON ur.roadmap_id = r.id
+            LEFT JOIN modules m ON r.id = m.roadmap_id
+            LEFT JOIN tasks t ON m.id = t.module_id
+            LEFT JOIN user_progress up ON t.id = up.task_id AND up.user_id = ?
+            WHERE ur.user_id = ?
+            GROUP BY r.id, r.title, ur.enrolled_at, ur.completed_at
+            ORDER BY ur.enrolled_at DESC
+        `, [userId, userId]);
+
+        // Get user's course progress
+        const [courseProgress] = await pool.execute(`
+            SELECT 
+                c.id, c.title, c.description, c.difficulty, c.duration,
+                uc.enrolled_at, uc.completed_at, uc.progress,
+                COUNT(DISTINCT cl.id) as total_lessons,
+                COUNT(DISTINCT CASE WHEN lp.completed = 1 THEN lp.lesson_id END) as completed_lessons
+            FROM user_courses uc
+            JOIN courses c ON uc.course_id = c.id
+            LEFT JOIN course_lessons cl ON c.id = cl.course_id
+            LEFT JOIN lesson_progress lp ON cl.id = lp.lesson_id AND lp.user_id = ?
+            WHERE uc.user_id = ?
+            GROUP BY c.id, c.title, uc.enrolled_at, uc.completed_at, uc.progress
+            ORDER BY uc.enrolled_at DESC
+        `, [userId, userId]);
+
+        // Get overall statistics
+        const [stats] = await pool.execute(`
+            SELECT 
+                COUNT(DISTINCT ur.roadmap_id) as roadmaps_enrolled,
+                COUNT(DISTINCT CASE WHEN ur.completed_at IS NOT NULL THEN ur.roadmap_id END) as roadmaps_completed,
+                COUNT(DISTINCT uc.course_id) as courses_enrolled,
+                COUNT(DISTINCT CASE WHEN uc.completed_at IS NOT NULL THEN uc.course_id END) as courses_completed,
+                COUNT(DISTINCT up.task_id) as total_tasks_completed,
+                COUNT(DISTINCT lp.lesson_id) as total_lessons_completed,
+                COUNT(DISTINCT b.id) as badges_earned,
+                COUNT(DISTINCT cert.id) as certificates_earned
+            FROM users u
+            LEFT JOIN user_roadmaps ur ON u.id = ur.user_id
+            LEFT JOIN user_courses uc ON u.id = uc.user_id
+            LEFT JOIN user_progress up ON u.id = up.user_id AND up.completed = 1
+            LEFT JOIN lesson_progress lp ON u.id = lp.user_id AND lp.completed = 1
+            LEFT JOIN badges b ON u.id = b.user_id
+            LEFT JOIN certificates cert ON u.id = cert.user_id
+            WHERE u.id = ?
+        `, [userId]);
+
+        res.json({
+            roadmaps: roadmapProgress,
+            courses: courseProgress,
+            stats: stats[0] || {}
+        });
+
+    } catch (error) {
+        console.error('Error fetching my progress:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get user's recent activity for My Progress
+app.get('/api/my-progress/activity', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        const [activities] = await pool.execute(`
+            (SELECT 'task_completed' as activity_type,
+                    CONCAT('Completed task: ', t.title) as description,
+                    r.title as context_title,
+                    up.completed_at as activity_date
+             FROM user_progress up
+             JOIN tasks t ON up.task_id = t.id
+             JOIN modules m ON t.module_id = m.id
+             JOIN roadmaps r ON m.roadmap_id = r.id
+             WHERE up.user_id = ? AND up.completed = 1 AND up.completed_at IS NOT NULL)
+            UNION ALL
+            (SELECT 'lesson_completed' as activity_type,
+                    CONCAT('Completed lesson: ', cl.title) as description,
+                    c.title as context_title,
+                    lp.completed_at as activity_date
+             FROM lesson_progress lp
+             JOIN course_lessons cl ON lp.lesson_id = cl.id
+             JOIN courses c ON cl.course_id = c.id
+             WHERE lp.user_id = ? AND lp.completed = 1 AND lp.completed_at IS NOT NULL)
+            UNION ALL
+            (SELECT 'roadmap_enrolled' as activity_type,
+                    CONCAT('Started roadmap: ', r.title) as description,
+                    r.title as context_title,
+                    ur.enrolled_at as activity_date
+             FROM user_roadmaps ur
+             JOIN roadmaps r ON ur.roadmap_id = r.id
+             WHERE ur.user_id = ?)
+            ORDER BY activity_date DESC
+            LIMIT 20
+        `, [userId, userId, userId]);
+
+        res.json(activities);
+    } catch (error) {
+        console.error('Error fetching user activity:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Auto-generate badge when roadmap is completed
+app.post('/api/roadmaps/:roadmapId/generate-badge', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const roadmapId = req.params.roadmapId;
+
+        // Verify roadmap completion
+        const [[completion]] = await pool.execute(`
+            SELECT 
+                r.title as roadmap_title,
+                COUNT(t.id) as total_tasks,
+                COUNT(CASE WHEN up.completed = 1 THEN up.task_id END) as completed_tasks
+            FROM roadmaps r
+            LEFT JOIN modules m ON r.id = m.roadmap_id
+            LEFT JOIN tasks t ON m.id = t.module_id
+            LEFT JOIN user_progress up ON t.id = up.task_id AND up.user_id = ?
+            WHERE r.id = ?
+            GROUP BY r.id, r.title
+        `, [userId, roadmapId]);
+
+        if (!completion || completion.total_tasks === 0 || completion.completed_tasks !== completion.total_tasks) {
+            return res.status(400).json({ 
+                error: 'Roadmap not fully completed',
+                progress: `${completion?.completed_tasks || 0}/${completion?.total_tasks || 0}`
+            });
+        }
+
+        // Get user info
+        const [[user]] = await pool.execute('SELECT username FROM users WHERE id = ?', [userId]);
+
+        // Check if badge already exists
+        const [[existingBadge]] = await pool.execute(
+            'SELECT id FROM badges WHERE user_id = ? AND roadmap_id = ?',
+            [userId, roadmapId]
+        );
+
+        if (existingBadge) {
+            return res.json({ 
+                message: 'Badge already exists',
+                badgeId: existingBadge.id,
+                alreadyExists: true
+            });
+        }
+
+        // Generate unique badge ID
+        const badgeId = `BADGE-${roadmapId}-${userId}-${Date.now()}`;
+
+        // Create badge record
+        await pool.execute(`
+            INSERT INTO badges (badge_id, user_id, roadmap_id, student_name, roadmap_title, completion_date)
+            VALUES (?, ?, ?, ?, ?, CURDATE())
+        `, [badgeId, userId, roadmapId, user.username, completion.roadmap_title]);
+
+        res.json({ 
+            message: 'Badge generated successfully',
+            badgeId: badgeId,
+            studentName: user.username,
+            roadmapTitle: completion.roadmap_title,
+            completionDate: new Date().toISOString().split('T')[0],
+            badgeUrl: `/badge.html?student=${encodeURIComponent(user.username)}&roadmap=${encodeURIComponent(completion.roadmap_title)}&date=${encodeURIComponent(new Date().toISOString().split('T')[0])}&id=${encodeURIComponent(badgeId)}`
+        });
+
+    } catch (error) {
+        console.error('Error generating badge:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Enhanced certificate generation for courses
+app.post('/api/courses/:courseId/generate-certificate', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const courseId = req.params.courseId;
+
+        // Check course completion
+        const [[courseData]] = await pool.execute(`
+            SELECT 
+                c.title, c.instructor,
+                uc.progress,
+                COUNT(cl.id) as total_lessons,
+                COUNT(CASE WHEN lp.completed = 1 THEN lp.lesson_id END) as completed_lessons
+            FROM courses c
+            JOIN user_courses uc ON c.id = uc.course_id
+            LEFT JOIN course_lessons cl ON c.id = cl.course_id
+            LEFT JOIN lesson_progress lp ON cl.id = lp.lesson_id AND lp.user_id = ?
+            WHERE c.id = ? AND uc.user_id = ?
+            GROUP BY c.id, c.title, uc.progress
+        `, [userId, courseId, userId]);
+
+        if (!courseData || courseData.progress < 100) {
+            return res.status(400).json({ 
+                error: 'Course not completed',
+                progress: courseData?.progress || 0
+            });
+        }
+
+        // Get user info
+        const [[user]] = await pool.execute('SELECT username FROM users WHERE id = ?', [userId]);
+
+        // Check if certificate already exists
+        const [[existingCert]] = await pool.execute(
+            'SELECT certificate_id FROM certificates WHERE user_id = ? AND course_id = ?',
+            [userId, courseId]
+        );
+
+        if (existingCert) {
+            return res.json({ 
+                message: 'Certificate already exists',
+                certificateId: existingCert.certificate_id,
+                alreadyExists: true
+            });
+        }
+
+        // Generate unique certificate ID
+        const certificateId = `CERT-${courseId}-${userId}-${Date.now()}`;
+
+        // Create certificate record
+        await pool.execute(`
+            INSERT INTO certificates (certificate_id, user_id, course_id, student_name, title, instructor_name, completion_date)
+            VALUES (?, ?, ?, ?, ?, ?, CURDATE())
+        `, [certificateId, userId, courseId, user.username, courseData.title, courseData.instructor || 'LearnPath Team']);
+
+        res.json({ 
+            message: 'Certificate generated successfully',
+            certificateId: certificateId,
+            studentName: user.username,
+            courseTitle: courseData.title,
+            instructor: courseData.instructor || 'LearnPath Team',
+            completionDate: new Date().toISOString().split('T')[0],
+            certificateUrl: `/certificate.html?student=${encodeURIComponent(user.username)}&course=${encodeURIComponent(courseData.title)}&date=${encodeURIComponent(new Date().toISOString().split('T')[0])}&id=${encodeURIComponent(certificateId)}&instructor=${encodeURIComponent(courseData.instructor || 'LearnPath Team')}`
+        });
+
+    } catch (error) {
+        console.error('Error generating certificate:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

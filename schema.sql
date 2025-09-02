@@ -338,6 +338,39 @@ CREATE INDEX idx_certificates_user ON certificates(user_id);
 CREATE INDEX idx_badges_user ON badges(user_id);
 CREATE INDEX idx_course_lessons_course ON course_lessons(course_id, order_index);
 
+-- Enhanced indexes for better performance
+CREATE INDEX idx_user_progress_completed ON user_progress(user_id, completed, completed_at);
+CREATE INDEX idx_user_roadmaps_completion ON user_roadmaps(user_id, roadmap_id, enrolled_at);
+CREATE INDEX idx_lesson_progress_completed ON lesson_progress(user_id, completed, completed_at);
+
+-- =====================================================================
+-- ACHIEVEMENTS SYSTEM
+-- =====================================================================
+
+CREATE TABLE user_achievements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    achievement_type ENUM('first_task', 'first_roadmap', 'first_course', 'speed_learner', 'dedicated_learner') NOT NULL,
+    achievement_title VARCHAR(255) NOT NULL,
+    achievement_description TEXT,
+    earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_user_achievement (user_id, achievement_type)
+);
+
+-- Insert sample achievements for existing users
+INSERT IGNORE INTO user_achievements (user_id, achievement_type, achievement_title, achievement_description)
+SELECT u.id, 'first_task', 'First Steps', 'Completed your first task'
+FROM users u
+WHERE u.role = 'user'
+AND EXISTS (SELECT 1 FROM user_progress up WHERE up.user_id = u.id AND up.completed = 1 LIMIT 1);
+
+INSERT IGNORE INTO user_achievements (user_id, achievement_type, achievement_title, achievement_description)
+SELECT u.id, 'first_roadmap', 'Roadmap Pioneer', 'Started your first roadmap'
+FROM users u
+WHERE u.role = 'user'
+AND EXISTS (SELECT 1 FROM user_roadmaps ur WHERE ur.user_id = u.id LIMIT 1);
+
 -- =====================================================================
 -- END OF SCHEMA
 -- =====================================================================

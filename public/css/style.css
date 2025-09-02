@@ -407,3 +407,68 @@ body {
         border-radius: 0.25rem !important;
     }
 }
+
+/* Progress tracking improvements */
+.task-completed {
+    background-color: #f0f9f0 !important;
+    border-left: 4px solid #28a745 !important;
+}
+
+.task-completed label {
+    text-decoration: line-through;
+    color: #6c757d;
+}
+
+.roadmap-progress-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.course-progress-card:hover {
+    transform: translateY(-2px); 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.activity-icon {
+    width: 40px;
+    height: 40px;
+    background: #f8f9fa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+}
+
+/* Badge and certificate enhancement */
+.badge-preview {
+    background: linear-gradient(135deg, #ffd700, #ffed4e);
+    border: 3px solid #d4af37;
+    border-radius: 15px;
+    padding: 2rem;
+    text-align: center;
+    margin: 1rem 0;
+}
+
+.certificate-preview {
+    background: linear-gradient(135deg, #fff, #f8f9fa);
+    border: 2px solid #dee2e6;
+    border-radius: 10px;
+    padding: 2rem;
+    text-align: center;
+    margin: 1rem 0;
+}
+
+/* Enhanced admin dashboard */
+.admin-stat-card {
+    transition: transform 0.2s ease;
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.admin-stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
