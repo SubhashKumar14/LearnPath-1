@@ -270,7 +270,7 @@ INSERT INTO tasks (id, module_id, title, description, resource_url, order_index)
 
 -- Insert sample courses
 INSERT INTO courses (id, title, description, difficulty, duration, category, instructor, created_by) VALUES
-(1, 'JavaScript Fundamentals', 'Master the basics of JavaScript programming', 'Beginner', '4 hours', 'Programming', 'John Smith', 1),
+(1, 'JavaScript Fundamentals', 'Master the basics of JavaScript programming', 'Beginner', '4 hours', 'Programming', 'LearnPath', 1),
 (2, 'React for Beginners', 'Learn React.js from scratch', 'Intermediate', '6 hours', 'Web Development', 'Jane Doe', 1),
 (3, 'Node.js Backend Development', 'Build scalable backend applications', 'Intermediate', '8 hours', 'Web Development', 'Mike Johnson', 1),
 (4, 'Python Data Science', 'Introduction to data science with Python', 'Beginner', '10 hours', 'Data Science', 'Sarah Wilson', 1),

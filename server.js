@@ -1422,8 +1422,8 @@ app.post('/api/courses', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { title, description, difficulty, duration } = req.body;
         const userId = req.user.userId;
-        await pool.execute('INSERT INTO courses (title, description, difficulty, duration, created_by) VALUES (?,?,?,?,?)',
-            [title, description, difficulty, duration, userId]);
+        await pool.execute('INSERT INTO courses (title, description, difficulty, duration, instructor, created_by) VALUES (?,?,?,?,?,?)',
+            [title, description, difficulty, duration, 'LearnPath', userId]);
         res.json({ message: 'Course created' });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Internal server error'}); }
 });
@@ -1432,8 +1432,8 @@ app.post('/api/courses', authenticateToken, requireAdmin, async (req, res) => {
 app.put('/api/courses/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { title, description, difficulty, duration } = req.body;
-        await pool.execute('UPDATE courses SET title=?, description=?, difficulty=?, duration=? WHERE id=?',
-            [title, description, difficulty, duration, req.params.id]);
+        await pool.execute('UPDATE courses SET title=?, description=?, difficulty=?, duration=?, instructor=? WHERE id=?',
+            [title, description, difficulty, duration, 'LearnPath', req.params.id]);
         res.json({ message: 'Course updated' });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Internal server error'}); }
 });
@@ -2076,7 +2076,7 @@ app.post('/api/certificates/generate', authenticateToken, async (req, res) => {
             certificateId, 
             studentName, 
             courses[0].title,
-            'LearnPath Instructor', // Default instructor name
+            'LearnPath', // Default instructor name
             completionDate
         ]);
         
@@ -2466,16 +2466,16 @@ app.post('/api/courses/:courseId/generate-certificate', authenticateToken, async
         await pool.execute(`
             INSERT INTO certificates (certificate_id, user_id, course_id, student_name, title, instructor_name, completion_date)
             VALUES (?, ?, ?, ?, ?, ?, CURDATE())
-        `, [certificateId, userId, courseId, user.username, courseData.title, courseData.instructor || 'LearnPath Team']);
+        `, [certificateId, userId, courseId, user.username, courseData.title, courseData.instructor || 'LearnPath']);
 
         res.json({ 
             message: 'Certificate generated successfully',
             certificateId: certificateId,
             studentName: user.username,
             courseTitle: courseData.title,
-            instructor: courseData.instructor || 'LearnPath Team',
+            instructor: courseData.instructor || 'LearnPath',
             completionDate: new Date().toISOString().split('T')[0],
-            certificateUrl: `/certificate.html?student=${encodeURIComponent(user.username)}&course=${encodeURIComponent(courseData.title)}&date=${encodeURIComponent(new Date().toISOString().split('T')[0])}&id=${encodeURIComponent(certificateId)}&instructor=${encodeURIComponent(courseData.instructor || 'LearnPath Team')}`
+            certificateUrl: `/certificate.html?student=${encodeURIComponent(user.username)}&course=${encodeURIComponent(courseData.title)}&date=${encodeURIComponent(new Date().toISOString().split('T')[0])}&id=${encodeURIComponent(certificateId)}&instructor=${encodeURIComponent(courseData.instructor || 'LearnPath')}`
         });
 
     } catch (error) {

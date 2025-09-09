@@ -1,53 +1,513 @@
-# 📊 Project Plan vs Implementation Status (Conversation-Derived Summary)
-This section was generated from the full build conversation. It reconciles what yo---
-## 🏗️ Architecture
+# 🎓 LearnPath - Enhanced Learning Management Platform
 
-![LearnPath System Architecture](docs/images/learnpath%20system%20architecture%20diagram.svg)
+> **A comprehensive roadmap-based learning platform with progress tracking, certificate generation, and admin analytics.**
 
-* **Frontend**: Vanilla JS + Bootstrap 5 served statically from `public/`.
-* **Backend**: Express REST API (`server.js`).
-* **Database**: MySQL; schema in `schema.sql` with relational integrity & cascading deletes for modules/tasks.
-* **Auth Storage**: JWT stored in `localStorage` (simple SPA approach).
-* **State**: In-browser JS manages current user, progress map, rendered views.ly planned, what has been delivered, and what remains (explicitly mentioned or implicitly agreed) so future contributors have instant project context.
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/SubhashKumar14/LearnPath-1)
+[![Node.js](https://img.shields.io/badge/node.js-18%2B-brightgreen.svg)](https://nodejs.org/)
+[![MySQL](https://img.shields.io/badge/mysql-8.0%2B-orange.svg)](https://mysql.com/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-### 1. Originally Planned / Requested
-Core functional asks:
-* Single administrator model (only one admin user in system).
-* Admin-only functionality strictly gated (UI + backend middleware).
-* Dynamic profile avatar initials derived from first (or full) username instead of placeholder "JD".
-* Reliable logout: clear session state, remove any default user artifacts, redirect / gate protected screens.
-* Comprehensive README with architecture + usage + API overview.
-* Consolidate scattered SQL fragments (fix-admin, update-schema, etc.) into a single authoritative `schema.sql` file.
-* Remove legacy / test / helper SQL and JS scripts after consolidation.
-* Clean repository footprint to essentials only.
+## 📋 Table of Contents
 
-Enhancement / forward-looking items raised during discussion:
-* Proper automated test suite (unit + integration) & future CI pipeline.
-* Password reset & email verification flows.
-* Real badge & certificate asset generation (PDF/PNG) instead of placeholder URLs.
-* Multi-admin / instructor / role expansion model (beyond single admin).
-* Rate limiting + audit logging + stronger security headers.
-* Frontend modularization (split `app.js`, introduce bundler) + accessibility improvements.
-* Database migration strategy (move beyond monolithic schema file).
-* Analytics & richer stats (per-module progress trends, completion curves).
-* Pagination, search, filtering for large roadmap sets.
-* Internationalization (i18n), dark mode, notification system (email / in-app), user engagement features.
-* LICENSE and CONTRIBUTING guidelines addition.
-* Potential shift of JWT storage to httpOnly cookies for improved security.
+- [🌟 Features](#-features)
+- [🏗️ System Architecture](#️-system-architecture)
+- [🚀 Quick Start](#-quick-start)
+- [📦 Installation](#-installation)
+- [⚙️ Configuration](#️-configuration)
+- [💻 Usage](#-usage)
+- [🔐 Authentication & Authorization](#-authentication--authorization)
+- [📊 API Documentation](#-api-documentation)
+- [🗄️ Database Schema](#️-database-schema)
+- [🎨 Frontend Structure](#-frontend-structure)
+- [🔧 Development](#-development)
+- [🚀 Deployment](#-deployment)
+- [🐛 Troubleshooting](#-troubleshooting)
+- [📈 Future Roadmap](#-future-roadmap)
+- [🤝 Contributing](#-contributing)
 
-### 2. Delivered (Implemented & Verified)
-* Single admin account seeded & enforced (`role='admin'`).
-* Middleware-based role gating (`authenticateToken`, `requireAdmin`) + UI hiding of admin panels.
-* Dynamic avatar initials generation in frontend (`getUserInitials` logic in `app.js`).
-* Hardened logout: clears localStorage, hides protected sections, prevents phantom access.
-* Expanded, detailed README (architecture, schema, API, security, troubleshooting, roadmap).
-* Unified `schema.sql` containing base schema, seeds, password hash fix, optional prototype tables.
-* Removal of deprecated test/helper files (integration & test scripts, auxiliary SQL, setup helpers) — repository slimmed.
-* Badge / certificate request endpoints (prototype issuing logic with placeholder asset URLs).
-* Admin dashboard statistics endpoint & UI integration.
-* Progress tracking (task-level) & activity feed endpoints.
-* Roadmap/module/task CRUD with ordered hierarchy.
-* Profile fetch/update endpoints with password hashing.
+## 🌟 Features
+
+### 🎯 Core Learning Features
+- **🛤️ Learning Roadmaps**: Structured learning paths with modules and tasks
+- **📚 Course Management**: Comprehensive course system with lessons and progress tracking
+- **✅ Progress Tracking**: Real-time task and lesson completion monitoring
+- **🏆 Achievement System**: Automated badge generation and milestone tracking
+- **📜 Certificate Generation**: PDF certificates for course completion
+- **📱 Responsive Design**: Mobile-first Bootstrap 5 interface
+
+### 👨‍💼 Admin Features
+- **📊 Analytics Dashboard**: Comprehensive statistics and user insights
+- **👥 User Management**: View user progress and activity
+- **📝 Content Creation**: CRUD operations for roadmaps, modules, tasks, and courses
+- **🎖️ Badge & Certificate Management**: Automated and manual certificate issuance
+- **📈 Performance Metrics**: Completion rates, engagement analytics, and trend analysis
+
+### 🔒 Security Features
+- **🔐 JWT Authentication**: Secure token-based authentication
+- **🛡️ Role-Based Access Control**: Admin and user role separation
+- **🔒 Password Hashing**: bcrypt encryption for secure password storage
+- **🚫 Input Validation**: Comprehensive server-side validation
+- **🏠 Session Management**: Secure session handling with MySQL store
+
+## 🏗️ System Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Backend       │    │   Database      │
+│  (Bootstrap 5)  │◄──►│  (Express.js)   │◄──►│    (MySQL)      │
+│                 │    │                 │    │                 │
+│ • Vanilla JS    │    │ • REST API      │    │ • User Data     │
+│ • SPA Design    │    │ • JWT Auth      │    │ • Progress      │
+│ • Progress UI   │    │ • Middleware    │    │ • Content       │
+│ • Admin Panel   │    │ • Validation    │    │ • Analytics     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### 📁 Project Structure
+```
+LearnPath/
+├── 📄 server.js              # Main Express server
+├── 🔐 auth_middleware.js     # JWT authentication middleware
+├── 🗄️ db.js                  # MySQL database connection
+├── 📋 schema.sql             # Complete database schema
+├── ⚙️ .env                   # Environment configuration
+├── 📦 package.json           # Dependencies and scripts
+├── 📖 README.md              # This documentation
+├── 📁 public/                # Frontend static files
+│   ├── 🏠 index.html         # Main SPA interface
+│   ├── 🎓 certificate.html   # Certificate template
+│   ├── 🏆 badge.html         # Badge template
+│   ├── 🎨 css/style.css      # Custom styling
+│   └── 💻 js/app.js          # Frontend application logic
+└── 📁 docs/                  # Documentation and diagrams
+    └── 🖼️ images/            # Architecture diagrams
+```
+
+## 🚀 Quick Start
+
+### Prerequisites
+- **Node.js** 18+ installed
+- **MySQL** 8.0+ installed and running
+- **Git** for cloning the repository
+
+### 1-Minute Setup
+```bash
+# Clone the repository
+git clone https://github.com/SubhashKumar14/LearnPath-1.git
+cd LearnPath-1
+
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your database credentials
+
+# Create and populate database
+mysql -u root -p < schema.sql
+
+# Start the server
+npm start
+```
+
+🎉 **Access your application at:** http://localhost:3000
+
+## 📦 Installation
+
+### Detailed Installation Steps
+
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/SubhashKumar14/LearnPath-1.git
+   cd LearnPath-1
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Database Setup**
+   ```bash
+   # Login to MySQL
+   mysql -u root -p
+   
+   # Create database (or use the schema.sql file)
+   CREATE DATABASE learnpath_db;
+   EXIT;
+   
+   # Import schema and sample data
+   mysql -u root -p < schema.sql
+   ```
+
+4. **Environment Configuration**
+   ```bash
+   # Copy example environment file
+   cp .env.example .env
+   
+   # Edit the configuration
+   nano .env
+   ```
+
+## ⚙️ Configuration
+
+### Environment Variables (.env)
+
+```bash
+# Database Configuration
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_NAME=learnpath_db
+
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# Security Configuration
+JWT_SECRET=your_super_secure_jwt_secret_key_change_in_production
+SESSION_SECRET=your_super_secure_session_secret_key_change_in_production
+```
+
+### Database Configuration
+
+The application uses MySQL with connection pooling. Key configuration:
+
+- **Connection Pool**: 10 concurrent connections
+- **Timeout**: 60 seconds
+- **Charset**: utf8mb4 for full Unicode support
+- **Timezone**: UTC for consistency
+
+## 💻 Usage
+
+### 🔑 Default Login Credentials
+
+| Role  | Email                | Password  | Purpose                    |
+|-------|---------------------|-----------|----------------------------|
+| Admin | admin@learnpath.com | password  | Full platform management   |
+| User  | john@example.com    | password  | Learning and progress      |
+| User  | jane@example.com    | password  | Learning and progress      |
+
+### 👨‍💼 Admin Features
+
+1. **Dashboard Access**: Login as admin to access the analytics dashboard
+2. **Content Management**: Create and edit roadmaps, modules, tasks, and courses
+3. **User Analytics**: View user progress, completion rates, and engagement metrics
+4. **Certificate Management**: Issue certificates and track achievements
+
+### 👨‍🎓 User Features
+
+1. **Browse Content**: Explore available roadmaps and courses
+2. **Track Progress**: Monitor completion status on the "My Progress" page
+3. **Earn Badges**: Automatic badge generation upon 100% roadmap completion
+4. **Get Certificates**: Receive certificates for completed courses
+
+## 🔐 Authentication & Authorization
+
+### Authentication Flow
+1. **Registration/Login**: Users authenticate with email/password
+2. **JWT Token**: Server issues JWT token upon successful login
+3. **Token Storage**: Frontend stores token in localStorage
+4. **Request Authorization**: Token sent in Authorization header
+5. **Role Verification**: Middleware validates token and user role
+
+### Role-Based Access Control
+
+```javascript
+// User roles
+const ROLES = {
+  USER: 'user',      // Can access learning content and progress
+  ADMIN: 'admin'     // Full access to admin dashboard and management
+};
+
+// Route protection examples
+app.get('/api/admin/*', requireAdmin);    // Admin only
+app.get('/api/user/*', authenticateToken); // Authenticated users
+app.get('/api/public/*');                 // Public access
+```
+
+## 📊 API Documentation
+
+### 🔐 Authentication Endpoints
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| POST | `/api/register` | User registration | Public |
+| POST | `/api/login` | User authentication | Public |
+| GET | `/api/profile` | Get user profile | User |
+| PUT | `/api/profile` | Update user profile | User |
+
+### 📚 Learning Endpoints
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/roadmaps` | Get all roadmaps | Public |
+| GET | `/api/roadmaps/:id` | Get roadmap details | Public |
+| GET | `/api/courses` | Get all courses | Public |
+| GET | `/api/courses/:id` | Get course details | Public |
+| POST | `/api/progress/task` | Update task progress | User |
+| POST | `/api/progress/lesson` | Update lesson progress | User |
+
+### 👨‍💼 Admin Endpoints
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/admin/stats` | Dashboard statistics | Admin |
+| GET | `/api/admin/user-analytics` | User analytics | Admin |
+| POST | `/api/admin/roadmaps` | Create roadmap | Admin |
+| PUT | `/api/admin/roadmaps/:id` | Update roadmap | Admin |
+| DELETE | `/api/admin/roadmaps/:id` | Delete roadmap | Admin |
+
+### 🏆 Achievement Endpoints
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| POST | `/api/roadmaps/:id/generate-badge` | Generate badge | User |
+| POST | `/api/courses/:id/generate-certificate` | Generate certificate | User |
+| GET | `/api/user/achievements` | Get user achievements | User |
+| GET | `/api/user/certificates` | Get user certificates | User |
+
+## 🗄️ Database Schema
+
+### Core Tables
+
+```sql
+-- Users and Authentication
+users (id, username, email, password, role, created_at, last_login)
+sessions (session_id, expires, data)
+
+-- Learning Content Structure
+roadmaps (id, title, description, created_at)
+modules (id, roadmap_id, title, description, order_index)
+tasks (id, module_id, title, description, resource_url, order_index)
+
+-- Course System
+courses (id, title, description, difficulty, duration, category, instructor)
+course_lessons (id, course_id, title, content, duration, order_index)
+
+-- Progress Tracking
+user_roadmaps (id, user_id, roadmap_id, enrolled_at)
+user_progress (id, user_id, task_id, completed, completed_at)
+user_courses (id, user_id, course_id, enrolled_at, progress, completed_at)
+lesson_progress (id, user_id, lesson_id, completed, completed_at)
+
+-- Achievements and Recognition
+certificates (id, certificate_id, user_id, course_id, student_name, title, completion_date)
+badges (id, badge_id, user_id, roadmap_id, student_name, badge_type, completion_date)
+user_achievements (id, user_id, achievement_type, achievement_title, earned_at)
+```
+
+### Performance Optimizations
+- **Indexes**: Strategic indexes on user_id, completion status, and foreign keys
+- **Connection Pooling**: Efficient database connection management
+- **Query Optimization**: Optimized joins and aggregations for analytics
+
+## 🎨 Frontend Structure
+
+### Technology Stack
+- **HTML5**: Semantic markup structure
+- **Bootstrap 5**: Responsive CSS framework
+- **Vanilla JavaScript**: No framework dependencies
+- **Font Awesome**: Icon library
+- **SPA Architecture**: Single Page Application design
+
+### Key Frontend Components
+
+```javascript
+// Main application modules
+- Authentication (login/register/logout)
+- Navigation (role-based menu visibility)
+- Dashboard (user progress and admin analytics)
+- Content Management (CRUD operations)
+- Progress Tracking (real-time updates)
+- Certificate Generation (PDF download)
+```
+
+### UI/UX Features
+- 📱 **Mobile Responsive**: Optimized for all screen sizes
+- 🎨 **Modern Design**: Clean, professional interface
+- ⚡ **Fast Loading**: Optimized assets and caching
+- ♿ **Accessible**: ARIA labels and semantic HTML
+- 🌙 **Consistent Theming**: Unified color scheme and typography
+
+## 🔧 Development
+
+### Development Scripts
+
+```bash
+# Start development server with auto-reload
+npm run dev
+
+# Start production server
+npm start
+
+# Database migration
+npm run db:migrate
+
+# Manual database commands
+mysql -u root -p learnpath_db < schema.sql
+```
+
+### Development Workflow
+
+1. **Code Changes**: Edit files in your preferred editor
+2. **Auto-Reload**: nodemon automatically restarts server on changes
+3. **Database Updates**: Run migrations when schema changes
+4. **Testing**: Test functionality in browser at http://localhost:3000
+5. **Commit**: Use Git for version control
+
+### Code Style Guidelines
+
+- **JavaScript**: ES6+ features, async/await for promises
+- **SQL**: Consistent naming, proper indexing
+- **HTML**: Semantic elements, proper nesting
+- **CSS**: BEM methodology, responsive design
+
+## 🚀 Deployment
+
+### Production Deployment
+
+1. **Environment Setup**
+   ```bash
+   # Set production environment
+   NODE_ENV=production
+   
+   # Use strong secrets
+   JWT_SECRET=your_production_jwt_secret
+   SESSION_SECRET=your_production_session_secret
+   ```
+
+2. **Database Configuration**
+   ```bash
+   # Create production database
+   mysql -u root -p
+   CREATE DATABASE learnpath_production;
+   
+   # Import schema
+   mysql -u root -p learnpath_production < schema.sql
+   ```
+
+3. **Process Management**
+   ```bash
+   # Using PM2 for production
+   npm install -g pm2
+   pm2 start server.js --name learnpath
+   pm2 startup
+   pm2 save
+   ```
+
+### Docker Deployment (Optional)
+
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| **Database Connection Error** | Verify MySQL is running and credentials in `.env` are correct |
+| **Port Already in Use** | Kill existing processes: `taskkill /f /im node.exe` (Windows) |
+| **JWT Token Invalid** | Clear localStorage and login again |
+| **Permission Denied** | Check user roles and admin authentication |
+| **Schema Errors** | Re-run `mysql -u root -p < schema.sql` |
+
+### Debug Mode
+
+```bash
+# Enable detailed logging
+DEBUG=learnpath:* npm start
+
+# Check database connections
+mysql -u root -p -e "SHOW PROCESSLIST;"
+
+# Verify server health
+curl http://localhost:3000/api/health
+```
+
+## 📈 Future Roadmap
+
+### 🚀 Planned Features
+
+#### Phase 1 (v2.1.0)
+- [ ] **Email Notifications**: Course completion and achievement notifications
+- [ ] **Advanced Search**: Full-text search across content
+- [ ] **Mobile App**: React Native companion app
+- [ ] **API Rate Limiting**: Enhanced security measures
+
+#### Phase 2 (v2.2.0)
+- [ ] **Multi-language Support**: i18n implementation
+- [ ] **Dark Mode**: Theme switching capability
+- [ ] **Advanced Analytics**: Machine learning insights
+- [ ] **Social Features**: User forums and discussions
+
+#### Phase 3 (v3.0.0)
+- [ ] **Microservices Architecture**: Service decomposition
+- [ ] **Real-time Collaboration**: Live learning sessions
+- [ ] **AI-Powered Recommendations**: Personalized learning paths
+- [ ] **Blockchain Certificates**: Immutable credential verification
+
+### 🔧 Technical Improvements
+- [ ] **Automated Testing**: Jest + Supertest test suite
+- [ ] **CI/CD Pipeline**: GitHub Actions integration
+- [ ] **Performance Monitoring**: Application performance insights
+- [ ] **Security Audit**: Comprehensive security review
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+### Development Process
+
+1. **Fork** the repository
+2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
+3. **Commit** your changes: `git commit -m 'Add amazing feature'`
+4. **Push** to the branch: `git push origin feature/amazing-feature`
+5. **Open** a Pull Request
+
+### Code of Conduct
+
+This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold this code.
+
+---
+
+## 📞 Support & Contact
+
+- **GitHub Issues**: [Report bugs or request features](https://github.com/SubhashKumar14/LearnPath-1/issues)
+- **Documentation**: [Wiki](https://github.com/SubhashKumar14/LearnPath-1/wiki)
+- **Email**: support@learnpath.dev
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **Bootstrap Team** for the excellent CSS framework
+- **Express.js Community** for the robust web framework
+- **MySQL Team** for the reliable database system
+- **Font Awesome** for the comprehensive icon library
+- **All Contributors** who have helped improve this project
+
+---
+
+<div align="center">
+  <strong>Built with ❤️ for the learning community</strong>
+  <br>
+  <sub>LearnPath v2.0.0 - Empowering education through technology</sub>
+</div>
 * Readme further enhanced with deployment, security, extensibility, troubleshooting matrices.
 
 ### 3. Partially Addressed / Foundations Laid

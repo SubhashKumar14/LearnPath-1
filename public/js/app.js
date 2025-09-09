@@ -2872,7 +2872,7 @@ function generateCertificateForUser(requestId) {
         document.getElementById('cert-student-name').value = request.student_name;
         document.getElementById('cert-course-title').value = request.course_title || request.roadmap_title;
         document.getElementById('cert-completion-date').value = new Date().toISOString().split('T')[0];
-        document.getElementById('cert-instructor-name').value = '';
+        document.getElementById('cert-instructor-name').value = 'LearnPath';
         document.getElementById('cert-id').value = `CERT-${Date.now()}`;
         
         const modal = new bootstrap.Modal(document.getElementById('certificateGenerationModal'));
